@@ -1,0 +1,8 @@
+basic1.png
+64 32
+tile_blank 0 0 64 32
+tile_grass 64 0 64 32
+tile_water 128 0 64 32
+tile_post 0 32 64 64
+tile_tree 64 32 64 64
+tile_sand 128 64 64 32

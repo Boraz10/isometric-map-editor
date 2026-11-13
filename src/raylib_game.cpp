@@ -19,7 +19,11 @@
 
 #include <stdio.h>                          // Required for: printf()
 #include <stdlib.h>                         // Required for: 
-#include <string.h>                         // Required for:
+#include <string>                         // Required for:
+#include <vector>
+
+#include <fstream>
+#include <sstream>
 
 //----------------------------------------------------------------------------------
 // Defines and Macros
@@ -48,13 +52,15 @@ typedef struct Vector2i {
 } Vector2i;
 
 typedef struct TileDef {
+    std::string name;
     Rectangle src;
 } TileDef;
 
-Vector2i worldSize =  {14, 10 };
-Vector2i tileSize = { 64, 32 };
+Vector2i worldSize =  { 14, 10 };
 Vector2i origin = { 5, 1 };
 
+
+Vector2i tileSize = { 0, 0 };
 int *pWorld = nullptr; // 2D world array
 
 //----------------------------------------------------------------------------------
@@ -63,13 +69,17 @@ int *pWorld = nullptr; // 2D world array
 static const int screenWidth = 800;
 static const int screenHeight = 450;
 
-Texture2D tileset;
+Texture2D tilesetTexture;
+int totalTiles;
+
+// Table for tileset. I need to do this manually it seems. 
+std::vector<TileDef> tileData;
 
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
 //----------------------------------------------------------------------------------
-Rectangle getTileByIndex(int index); // Calculate which tile to display based on provided index
 Vector2i toScreen(int x, int y); // transform tile coordinate to screen coordinate, so we know where to draw it
+bool loadTileset(std::string fileName); // load a tileset from a tileset metadata file.
 
 
 //----------------------------------------------------------------------------------
@@ -82,37 +92,33 @@ int main(void)
     
     InitWindow(screenWidth, screenHeight, "Map making program");
     SetTargetFPS(60);
+
+
+
+    // not world tiles, so we can keep these seperate. 
+    // TODO, maybe put these in a seperate file. It could make it a little easier. 
     
-    // load tileset
-    // Keep a CPU-side copy (Image) so we can read pixel colours from it,
-    // and upload it to the GPU (Texture2D) for drawing.
-    Image tilesetImage = LoadImage(TextFormat("%sresources/tileset3.png", GetApplicationDirectory()));
-    if (!IsImageValid(tilesetImage)) {
-        TraceLog(LOG_ERROR, "Could not load tileset");
+    Texture2D cursorTexture = LoadTexture(TextFormat("%sresources/cursor.png", GetApplicationDirectory()));
+    if (!IsTextureValid(cursorTexture)) {
+        TraceLog(LOG_ERROR, "Could not load cursor tile");
+        CloseWindow();
+        return 1;
+    }
+ 
+    Image cheatTileImage = LoadImage(TextFormat("%sresources/cheat_tile.png", GetApplicationDirectory()));
+    if (!IsImageValid(cheatTileImage)) {
+        TraceLog(LOG_ERROR, "Could not load cheat tile");
         CloseWindow();
         return 1;
     }
 
-    
-    tileset = LoadTextureFromImage(tilesetImage);
+    const Rectangle basicRect = {0,  0, 64, 32 };
 
-    // Table for tileset. I need to do this manually it seems. 
-    const TileDef tileDefs[] = {
-        { {   0,  0, 64, 32 } }, // 0 white
-        { { 128,  0, 64, 32 } }, // 1 grass
-        { { 192,  0, 64, 32 } }, // 2 water
-        { {   0, 32, 64, 64 } }, // 3 post (2 high)
-        { {  64, 32, 64, 64 } }, // 4 tree (2 high)
-        { { 128, 64, 64, 32 } }, // 5 light grass
-    };
-
-
-    const int totalTiles = sizeof(tileDefs) / sizeof(tileDefs[0]);
-
-    // not world tiles, so we can keep these seperate. 
-    // TODO, maybe put these in a seperate file. It could make it a little easier. 
-    const Rectangle cursorTile = {64,  0, 64, 32 };
-    const Rectangle cheatTile = {192, 64, 64, 32};
+    // Load tileset
+    if (!loadTileset("basic1.tileset")) {
+        CloseWindow();
+        return 1;
+    }
     
     // Initialise world
     pWorld = new int[worldSize.x * worldSize.y]{ 0 };
@@ -147,7 +153,7 @@ int main(void)
 
 
         // Look up the colour under the mouse in the "cheat" tile (index 5) of the tileset
-        Color pixelColor = GetImageColor(tilesetImage, (int)cheatTile.x + offset.x, (int)cheatTile.y + offset.y);
+        Color pixelColor = GetImageColor(cheatTileImage, (int)basicRect.x + offset.x, (int)basicRect.y + offset.y);
 
         selected = {
             (selectedCell.y - origin.y) + (selectedCell.x - origin.x),
@@ -171,13 +177,12 @@ int main(void)
                     Vector2i screenPos  = toScreen(x, y);
 
                     // figure out which tile to draw based on the index in the array.
-                    // TODO: I need to account for tiles which have a height greater than 1
-                    Rectangle src = tileDefs[pWorld[y * worldSize.x + x]].src;
+                    Rectangle src = tileData[pWorld[y * worldSize.x + x]].src;
                     Vector2 pos = {
                         (float)screenPos.x,
                         (float)screenPos.y - (src.height - tileSize.y)
                     };
-                    DrawTextureRec(tileset, src, pos, WHITE);
+                    DrawTextureRec(tilesetTexture, src, pos, WHITE);
                     
                 }
             }
@@ -186,17 +191,15 @@ int main(void)
 
             // mouse selection overlay thing
             Vector2i selectedPos = toScreen(selected.x, selected.y);
-            DrawTextureRec(tileset, getTileByIndex(1), Vector2{(float)selectedPos.x, (float)selectedPos.y}, WHITE);
+            DrawTextureRec(cursorTexture, basicRect, Vector2{(float)selectedPos.x, (float)selectedPos.y}, WHITE);
 
             // DrawRectangleLines(selectedCell.x * tileSize.x, selectedCell.y * tileSize.y, tileSize.x, tileSize.y, RED);
 
-            std::string mouseInfo = "Mouse  : " + std::to_string(mousePos.x) + ", " + std::to_string(mousePos.y);
-            std::string cellInfo = "Cell     : " + std::to_string(selectedCell.x) + ", " + std::to_string(selectedCell.y);
-            std::string selectedInfo = "Selected     : " + std::to_string(selected.x) + ", " + std::to_string(selected.y);
+            // std::string mouseInfo = "Mouse  : " + std::to_string(mousePos.x) + ", " + std::to_string(mousePos.y);
+            std::string selectedInfo = "Selected : " + std::to_string(selected.x) + ", " + std::to_string(selected.y);
 
-            DrawText(mouseInfo.c_str(), 4, 4, 22, DARKGRAY);
-            DrawText(cellInfo.c_str(), 4, 34, 22, DARKGRAY);
-            DrawText(selectedInfo.c_str(), 4, 64, 22, DARKGRAY);
+            // DrawText(mouseInfo.c_str(), 4, 4, 22, DARKGRAY);
+            DrawText(selectedInfo.c_str(), 4, 4, 22, DARKGRAY);
 
         }
 
@@ -210,8 +213,9 @@ int main(void)
     // De-Initialization
     //--------------------------------------------------------------------------------------
 
-    UnloadTexture(tileset);
-    UnloadImage(tilesetImage);
+    UnloadTexture(tilesetTexture);
+    UnloadTexture(cursorTexture);
+    UnloadImage(cheatTileImage);
     delete[] pWorld;
 
     CloseWindow();          // Close window and OpenGL context
@@ -221,23 +225,60 @@ int main(void)
     return 0;
 }
 
-
-Rectangle getTileByIndex(int index) {
-    int tilesPerRow = tileset.width / tileSize.x;
-    int idX = index % tilesPerRow;
-    int idY = index / tilesPerRow;
-
-    return Rectangle {
-        (float)(idX * tileSize.x),
-        (float)(idY * tileSize.y),
-        (float)tileSize.x,
-        (float)tileSize.y,
-    };
-}
-
 Vector2i toScreen(int x, int y) {
     return Vector2i {
         (origin.x * tileSize.x) + (x - y) * (tileSize.x / 2),
         (origin.y * tileSize.y) + (x + y) * (tileSize.y / 2),
     };
+}
+
+bool loadTileset(std::string fileName) {
+    std::string dir = std::string(GetApplicationDirectory()) + "resources/tilesets/";
+
+
+    std::ifstream file(dir + fileName);
+
+    if (!file.is_open()) {
+        TraceLog(LOG_ERROR, "Could not open tileset file: %s", (dir + fileName).c_str());
+        return false;
+    }
+
+    // unload previous tileset, just in case
+    tileData.clear();
+    if (IsTextureValid(tilesetTexture)) UnloadTexture(tilesetTexture);
+
+    std::string line;
+    
+    // Line 1 is the tileset image source
+    std::getline(file, line);
+    std::istringstream imageLine(line);
+    std::string imageName;
+    imageLine >> imageName;
+
+    tilesetTexture = LoadTexture((dir + imageName).c_str());
+    if (!IsTextureValid(tilesetTexture)) {
+        TraceLog(LOG_ERROR, "%s: could not load image '%s'", fileName.c_str(), imageName.c_str());
+        return false;
+    }
+
+    // Line 2 is the tile size footprint
+    std::getline(file, line);
+    std::istringstream sizeLine(line);
+    if (!(sizeLine >> tileSize.x >> tileSize.y || tileSize.x <= 0 || tileSize.y <= 0)) {
+        TraceLog(LOG_ERROR, "%s: line 2 should be the tile size, e.g. '64 32'", fileName.c_str());
+        return false;
+    }
+
+    // the remaining lines populate the tiledefs struct in format: x y w h
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        TileDef t;
+        if (iss >> t.name >> t.src.x >> t.src.y >> t.src.width >> t.src.height) {
+            tileData.push_back(t);
+        }
+    }
+ 
+    totalTiles = (int)tileData.size();
+    return totalTiles > 0;
+
 }

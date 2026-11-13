@@ -1,0 +1,12 @@
+# forest.tileset
+image     forest.png
+footprint 64 32          # size of a flat diamond on this sheet
+
+# name         x    y    w    h      (bottom-anchored; h > footprint.y means a tall tile)
+tile white       0    0   64   32
+tile cursor     64    0   64   32
+tile grass     128    0   64   32
+tile water     192    0   64   32
+tile post        0   32   64   64
+tile tree       64   32   64   64
+tile lightgrass 128  64   64   32
