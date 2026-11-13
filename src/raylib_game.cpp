@@ -24,6 +24,8 @@
 
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <cmath>
 
 //----------------------------------------------------------------------------------
 // Defines and Macros
@@ -126,6 +128,10 @@ int main(void)
     // Initialise mouse info
     Vector2i mousePos = { 0, 0 };
     Vector2i selected = { 0, 0 };
+
+    // Initialise camera info
+    Camera2D camera = {};
+    camera.zoom = 1.0f;
     
     //---------------------------------------------------------
 
@@ -137,6 +143,25 @@ int main(void)
         // Poll inputs
         mousePos = {(int)GetMousePosition().x , (int)GetMousePosition().y};
 
+        // Panning with the right mouse button
+        if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
+            Vector2 delta = GetMouseDelta(); // change in mouse position over one frame
+            camera.target.x -= delta.x / camera.zoom;
+            camera.target.y -= delta.y / camera.zoom; // divide so we pan relative to zoom
+        }
+
+        // Zooming with mouse wheel
+        float wheel = GetMouseWheelMove();
+
+        if (wheel != 0) {
+            Vector2 mouseWorld = GetScreenToWorld2D(GetMousePosition(), camera);
+            camera.offset = GetMousePosition(); // zoom around the mouse
+            camera.target = mouseWorld; // pin to same spot on map
+            camera.zoom = std::clamp(camera.zoom * powf(1.25f, wheel), 0.25f, 8.0f);
+
+        }
+
+        // Placing tiles with the left mouse button
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             // cehck bounds of the world space 
             if (selected.x >= 0 && selected.x < worldSize.x && selected.y >= 0 && selected.y < worldSize.y) {
@@ -147,9 +172,14 @@ int main(void)
             }
         }
 
+        Vector2 mouseWorld = GetScreenToWorld2D(GetMousePosition(), camera);
+        int mx = (int)floorf(mouseWorld.x);
+        int my = (int)floorf(mouseWorld.y);
+
+
         // Make calculations
-        Vector2i selectedCell = { mousePos.x / tileSize.x, mousePos.y / tileSize.y }; // Using integer division
-        Vector2i offset = { mousePos.x % tileSize.x, mousePos.y % tileSize.y };
+    Vector2i selectedCell = { (int)floorf((float)mx / tileSize.x), (int)floorf((float)my / tileSize.y) };
+    Vector2i offset = { mx - selectedCell.x * tileSize.x, my - selectedCell.y * tileSize.y };
 
 
         // Look up the colour under the mouse in the "cheat" tile (index 5) of the tileset
@@ -171,29 +201,32 @@ int main(void)
         { // Drawing
             ClearBackground(RAYWHITE); // Render background
 
-            // Iteterate through every cell, from top top bottom, since bottom is closer and should be rendered later. 
-            for (int y = 0; y < worldSize.y; y++) {
-                for (int x = 0; x < worldSize.x; x++) {
-                    Vector2i screenPos  = toScreen(x, y);
+            BeginMode2D(camera); 
+            {
+                // Iteterate through every cell, from top top bottom, since bottom is closer and should be rendered later. 
+                for (int y = 0; y < worldSize.y; y++) {
+                    for (int x = 0; x < worldSize.x; x++) {
+                        Vector2i screenPos  = toScreen(x, y);
 
-                    // figure out which tile to draw based on the index in the array.
-                    Rectangle src = tileData[pWorld[y * worldSize.x + x]].src;
-                    Vector2 pos = {
-                        (float)screenPos.x,
-                        (float)screenPos.y - (src.height - tileSize.y)
-                    };
-                    DrawTextureRec(tilesetTexture, src, pos, WHITE);
-                    
+                        // figure out which tile to draw based on the index in the array.
+                        Rectangle src = tileData[pWorld[y * worldSize.x + x]].src;
+                        Vector2 pos = {
+                            (float)screenPos.x,
+                            (float)screenPos.y - (src.height - tileSize.y)
+                        };
+                        DrawTextureRec(tilesetTexture, src, pos, WHITE);
+                        
+                    }
                 }
+
+                // selection cursor
+                Vector2i selectedPos = toScreen(selected.x, selected.y);
+                DrawTextureRec(cursorTexture, basicRect, Vector2{(float)selectedPos.x, (float)selectedPos.y}, WHITE);
+
+                // DrawRectangleLines(selectedCell.x * tileSize.x, selectedCell.y * tileSize.y, tileSize.x, tileSize.y, RED);
+
             }
-
-            // drawing selection info
-
-            // mouse selection overlay thing
-            Vector2i selectedPos = toScreen(selected.x, selected.y);
-            DrawTextureRec(cursorTexture, basicRect, Vector2{(float)selectedPos.x, (float)selectedPos.y}, WHITE);
-
-            // DrawRectangleLines(selectedCell.x * tileSize.x, selectedCell.y * tileSize.y, tileSize.x, tileSize.y, RED);
+        EndMode2D();
 
             // std::string mouseInfo = "Mouse  : " + std::to_string(mousePos.x) + ", " + std::to_string(mousePos.y);
             std::string selectedInfo = "Selected : " + std::to_string(selected.x) + ", " + std::to_string(selected.y);
