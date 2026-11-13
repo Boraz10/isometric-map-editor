@@ -47,6 +47,10 @@ typedef struct Vector2i {
     }
 } Vector2i;
 
+typedef struct TileDef {
+    Rectangle src;
+} TileDef;
+
 Vector2i worldSize =  {14, 10 };
 Vector2i tileSize = { 64, 32 };
 Vector2i origin = { 5, 1 };
@@ -82,15 +86,33 @@ int main(void)
     // load tileset
     // Keep a CPU-side copy (Image) so we can read pixel colours from it,
     // and upload it to the GPU (Texture2D) for drawing.
-    Image tilesetImage = LoadImage(TextFormat("%sresources/tileset.png", GetApplicationDirectory()));
+    Image tilesetImage = LoadImage(TextFormat("%sresources/tileset3.png", GetApplicationDirectory()));
     if (!IsImageValid(tilesetImage)) {
         TraceLog(LOG_ERROR, "Could not load tileset");
         CloseWindow();
         return 1;
     }
-    tileset = LoadTextureFromImage(tilesetImage);
-    int totalTiles = (tileset.width / tileSize.x) * (tileset.height / tileSize.y);
+
     
+    tileset = LoadTextureFromImage(tilesetImage);
+
+    // Table for tileset. I need to do this manually it seems. 
+    const TileDef tileDefs[] = {
+        { {   0,  0, 64, 32 } }, // 0 white
+        { { 128,  0, 64, 32 } }, // 1 grass
+        { { 192,  0, 64, 32 } }, // 2 water
+        { {   0, 32, 64, 64 } }, // 3 post (2 high)
+        { {  64, 32, 64, 64 } }, // 4 tree (2 high)
+        { { 128, 64, 64, 32 } }, // 5 light grass
+    };
+
+
+    const int totalTiles = sizeof(tileDefs) / sizeof(tileDefs[0]);
+
+    // not world tiles, so we can keep these seperate. 
+    // TODO, maybe put these in a seperate file. It could make it a little easier. 
+    const Rectangle cursorTile = {64,  0, 64, 32 };
+    const Rectangle cheatTile = {192, 64, 64, 32};
     
     // Initialise world
     pWorld = new int[worldSize.x * worldSize.y]{ 0 };
@@ -114,7 +136,8 @@ int main(void)
             if (selected.x >= 0 && selected.x < worldSize.x && selected.y >= 0 && selected.y < worldSize.y) {
                 // increment the integer stored in the world array. 
                 // modul0 makes it wrap around which is handy
-                ++pWorld[selected.y * worldSize.x + selected.x] % totalTiles;
+                int &t = pWorld[selected.y * worldSize.x + selected.x];
+                t = (t + 1) % totalTiles;
             }
         }
 
@@ -124,7 +147,6 @@ int main(void)
 
 
         // Look up the colour under the mouse in the "cheat" tile (index 5) of the tileset
-        Rectangle cheatTile = getTileByIndex(5);
         Color pixelColor = GetImageColor(tilesetImage, (int)cheatTile.x + offset.x, (int)cheatTile.y + offset.y);
 
         selected = {
@@ -150,7 +172,12 @@ int main(void)
 
                     // figure out which tile to draw based on the index in the array.
                     // TODO: I need to account for tiles which have a height greater than 1
-                    DrawTextureRec(tileset, getTileByIndex(pWorld[y * worldSize.x + x]), Vector2{(float)screenPos.x, (float)screenPos.y}, WHITE);
+                    Rectangle src = tileDefs[pWorld[y * worldSize.x + x]].src;
+                    Vector2 pos = {
+                        (float)screenPos.x,
+                        (float)screenPos.y - (src.height - tileSize.y)
+                    };
+                    DrawTextureRec(tileset, src, pos, WHITE);
                     
                 }
             }
