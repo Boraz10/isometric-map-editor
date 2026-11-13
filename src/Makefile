@@ -33,12 +33,7 @@ PROJECT_NAME          ?= raylib_game
 PROJECT_VERSION       ?= 1.0
 PROJECT_BUILD_PATH    ?= .
 PROJECT_SOURCE_FILES  ?= \
-    raylib_game.c \
-    screen_logo.c \
-    screen_title.c \
-    screen_options.c \
-    screen_gameplay.c \
-    screen_ending.c
+    raylib_game.cpp
 
 # raylib library variables
 RAYLIB_PATH           ?= C:\raylib\raylib
@@ -106,31 +101,32 @@ ifeq ($(PLATFORM),PLATFORM_WEB)
     export PATH        := $(EMSDK_PATH);$(EMSCRIPTEN_PATH);$(CLANG_PATH);$(NODE_PATH);$(PYTHON_PATH);$(PATH)
 endif
 
-# Define default C compiler: CC
+# Define default C++ compiler: CC
+# NOTE: Variable is still named CC (template convention), but it holds a C++ compiler
 #------------------------------------------------------------------------------------------------
-CC = gcc
+CC = g++
 
 ifeq ($(PLATFORM),PLATFORM_DESKTOP)
     ifeq ($(PLATFORM_OS),OSX)
         # OSX default compiler
-        CC = clang
+        CC = clang++
     endif
     ifeq ($(PLATFORM_OS),BSD)
         # FreeBSD, OpenBSD, NetBSD, DragonFly default compiler
-        CC = clang
+        CC = clang++
     endif
 endif
 ifeq ($(PLATFORM),PLATFORM_WEB)
     # HTML5 emscripten compiler
     # WARNING: To compile to HTML5, code must be redesigned
     # to use emscripten.h and emscripten_set_main_loop()
-    CC = emcc
+    CC = em++
 endif
 ifeq ($(PLATFORM),PLATFORM_DRM)
     ifeq ($(USE_RPI_CROSS_COMPILER),TRUE)
         # Define RPI cross-compiler
-        #CC = armv6j-hardfloat-linux-gnueabi-gcc
-        CC = $(RPI_TOOLCHAIN)/bin/arm-linux-gnueabihf-gcc
+        #CC = armv6j-hardfloat-linux-gnueabi-g++
+        CC = $(RPI_TOOLCHAIN)/bin/arm-linux-gnueabihf-g++
     endif
 endif
 
@@ -156,13 +152,13 @@ endif
 #  -Wno-missing-braces  ignore invalid warning (GCC bug 53119)
 #  -Wno-unused-value    ignore unused return values of some functions (i.e. fread())
 #  -D_DEFAULT_SOURCE    use with -std=c99 on Linux and PLATFORM_WEB, required for timespec
-CFLAGS = -Wall -D_DEFAULT_SOURCE -Wno-missing-braces -Wno-unused-value -Wno-unused-result -Wno-pointer-sign $(PROJECT_CUSTOM_FLAGS)
-#CFLAGS += -Wextra -Wmissing-prototypes -Wstrict-prototypes
+CFLAGS = -Wall -D_DEFAULT_SOURCE -Wno-missing-braces -Wno-unused-value -Wno-unused-result $(PROJECT_CUSTOM_FLAGS)
+#CFLAGS += -Wextra
 
 ifeq ($(PLATFORM),PLATFORM_WEB)
-    CFLAGS += -std=gnu99
+    CFLAGS += -std=gnu++17
 else
-    CFLAGS += -std=c99
+    CFLAGS += -std=c++17
 endif
 
 ifeq ($(BUILD_MODE),DEBUG)
@@ -183,7 +179,7 @@ else
     endif
 endif
 ifeq ($(PLATFORM),PLATFORM_DRM)
-    CFLAGS += -std=gnu99 -DEGL_NO_X11
+    CFLAGS += -std=gnu++17 -DEGL_NO_X11
 endif
 
 # Define include paths for required headers: INCLUDE_PATHS
@@ -319,7 +315,7 @@ endif
 
 # Define all object files from source files
 #------------------------------------------------------------------------------------------------
-OBJS = $(patsubst %.c, %.o, $(PROJECT_SOURCE_FILES))
+OBJS = $(patsubst %.cpp, %.o, $(PROJECT_SOURCE_FILES))
 
 # Define processes to execute
 #------------------------------------------------------------------------------------------------
@@ -342,7 +338,7 @@ $(PROJECT_NAME): $(OBJS)
 
 # Compile source files
 # NOTE: This pattern will compile every module defined on $(OBJS)
-%.o: %.c
+%.o: %.cpp
 	$(CC) -c $< -o $@ $(CFLAGS) $(INCLUDE_PATHS) -D$(PLATFORM)
 
 # Clean everything
