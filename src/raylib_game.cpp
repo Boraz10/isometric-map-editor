@@ -11,6 +11,7 @@
  ********************************************************************************************/
 
 #include "raylib.h"
+
 #include <iostream>
 
 #if defined(PLATFORM_WEB)
@@ -66,7 +67,8 @@ Vector2i origin = {5, 1};
 
 Vector2i tileSize = {0, 0};
 Vector2 mousePos = {0, 0};
-int *pWorld = nullptr; // 2D world array
+int *pWorld = nullptr;         // 2D world array
+bool *pCollisionMap = nullptr; // 2D collsion map array
 
 //----------------------------------------------------------------------------------
 // Global Variables Definition (local to this module)
@@ -98,7 +100,7 @@ int main(void)
     SetTargetFPS(60);
 
     // Load cursor and cheat tiles seperately.
-
+    // TODO: Make this whole secion a lot cleaner.
     Texture2D cursorTexture = LoadTexture(TextFormat("%sresources/cursor.png", GetApplicationDirectory()));
     if (!IsTextureValid(cursorTexture))
     {
@@ -115,6 +117,15 @@ int main(void)
         return 1;
     }
 
+    // Load collision indicator tile
+    Texture2D collisionTexture = LoadTexture(TextFormat("%sresources/collision.png", GetApplicationDirectory()));
+    if (!IsTextureValid(collisionTexture))
+    {
+        TraceLog(LOG_ERROR, "Could not load collision tile");
+        CloseWindow();
+        return 1;
+    }
+
     // Load tileset
     if (!loadTileset("basic1.tileset"))
     {
@@ -126,6 +137,7 @@ int main(void)
 
     // Initialise world
     pWorld = new int[worldSize.x * worldSize.y]{0};
+    pCollisionMap = new bool[worldSize.x * worldSize.y]{false};
 
     // Initialise mouse info
     Vector2i selected = {0, 0};
@@ -136,6 +148,25 @@ int main(void)
 
     // Initialise tile selection info
     int currentTile = 0;
+
+    // Info for positioning of the GUI
+    int box_size = 128;
+    int box_offset = 8;
+
+    int boxPositionX = box_offset;
+    int boxPositionY = screenHeight - box_size - box_offset;
+
+    // Layer boolean
+    bool collisionLayer = false; // false = Map layer, true = Collision layer
+    bool collisionBrush = true;
+
+    // Rectangle displaying currentLayer
+    Rectangle layerRect = {boxPositionX, boxPositionY - 30, box_size, 30};
+
+    // Info for displaying the layer GUI image
+    Vector2 layerGUIImagePos = {
+        boxPositionX + (box_size - 64) / 2.0f,
+        boxPositionY + box_size - box_size / 3.0f - 32};
 
     //---------------------------------------------------------
 
@@ -148,10 +179,19 @@ int main(void)
         mousePos = GetMousePosition();
 
         // left and right arrow keys switch current tile
-        if (IsKeyPressed(KEY_RIGHT))
-            currentTile = (currentTile + 1) % totalTiles;
-        if (IsKeyPressed(KEY_LEFT))
-            currentTile = (currentTile - 1 + totalTiles) % totalTiles;
+        if (!collisionLayer)
+        {
+            if (IsKeyPressed(KEY_RIGHT))
+                currentTile = (currentTile + 1) % totalTiles;
+            if (IsKeyPressed(KEY_LEFT))
+                currentTile = (currentTile - 1 + totalTiles) % totalTiles;
+        }
+
+        // up arrow key switched between collision and map layers
+        if (IsKeyPressed(KEY_UP))
+        {
+            collisionLayer = !collisionLayer;
+        }
 
         // Panning with the right mouse button
         if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
@@ -200,11 +240,26 @@ int main(void)
             selected += {+1, +0}; // YELLOW (bottom-right corner)
 
         // Placing tiles with the left mouse button
-        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+
+        bool inBounds = (selected.x >= 0 && selected.x < worldSize.x && selected.y >= 0 && selected.y < worldSize.y);
+        if (inBounds)
         {
-            if (selected.x >= 0 && selected.x < worldSize.x && selected.y >= 0 && selected.y < worldSize.y)
+            int idx = selected.y * worldSize.x + selected.x;
+            if (collisionLayer)
             {
-                pWorld[selected.y * worldSize.x + selected.x] = currentTile;
+                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                {
+                    collisionBrush = !pCollisionMap[idx];
+                }
+
+                if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+                {
+                    pCollisionMap[idx] = collisionBrush;
+                }
+            }
+            else if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+            {
+                pWorld[idx] = currentTile;
             }
         }
 
@@ -229,6 +284,15 @@ int main(void)
                             (float)screenPos.x,
                             (float)screenPos.y - (src.height - tileSize.y)};
                         DrawTextureRec(tilesetTexture, src, pos, WHITE);
+
+                        // Draw the collision layer on top of the texture layer, if collision mode is on
+                        if (collisionLayer)
+                        {
+                            if (pCollisionMap[y * worldSize.x + x])
+                            {
+                                DrawTextureRec(collisionTexture, rectDimensions, pos, WHITE);
+                            }
+                        }
                     }
                 }
 
@@ -242,13 +306,6 @@ int main(void)
 
             DrawText(TextFormat("Selected : %d, %d", selected.x, selected.y), 4, 4, 22, DARKGRAY);
 
-            // Draw the current tile info box
-            int box_size = 128;
-            int box_offset = 8;
-
-            int boxPositionX = box_offset;
-            int boxPositionY = screenHeight - box_size - box_offset;
-
             // white box
             DrawRectangle(boxPositionX, boxPositionY, box_size, box_size, RAYWHITE);
 
@@ -260,8 +317,23 @@ int main(void)
             Vector2 tilePos = {
                 boxPositionX + (box_size - tile.src.width) / 2.0f,
                 boxPositionY + box_size - box_size / 3.0f - tile.src.height};
-            DrawTextureRec(tilesetTexture, tile.src, tilePos, WHITE);
-            DrawText((std::to_string(currentTile) + ". " + tile.name).c_str(), boxPositionX + box_offset, boxPositionY + box_size - box_offset * 3, 18, BLACK);
+
+            if (collisionLayer)
+            {
+                DrawTextureRec(collisionTexture, rectDimensions, layerGUIImagePos, WHITE);
+                DrawText("Collisions", boxPositionX + box_offset, boxPositionY + box_size - box_offset * 3, 18, BLACK);
+            }
+            else
+            {
+                DrawTextureRec(tilesetTexture, tile.src, tilePos, WHITE);
+                DrawText((std::to_string(currentTile) + ". " + tile.name).c_str(), boxPositionX + box_offset, boxPositionY + box_size - box_offset * 3, 18, BLACK);
+            }
+
+            // Draw box for switching layer
+            DrawRectangle(layerRect.x, layerRect.y, layerRect.width, layerRect.height, RAYWHITE);
+            DrawRectangleLines(layerRect.x, layerRect.y, layerRect.width, layerRect.height, BLACK);
+            DrawText(TextFormat("Layer: %s", ((collisionLayer) ? "Collision" : "Map")),
+                     layerRect.x + 6, layerRect.y + 6, 16, BLACK);
         }
 
         EndDrawing();
@@ -273,8 +345,10 @@ int main(void)
 
     UnloadTexture(tilesetTexture);
     UnloadTexture(cursorTexture);
+    UnloadTexture(collisionTexture);
     UnloadImage(cheatTileImage);
     delete[] pWorld;
+    delete[] pCollisionMap;
 
     CloseWindow(); // Close window and OpenGL context
 
