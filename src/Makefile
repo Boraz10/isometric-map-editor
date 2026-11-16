@@ -33,7 +33,8 @@ PROJECT_NAME          ?= raylib_game
 PROJECT_VERSION       ?= 1.0
 PROJECT_BUILD_PATH    ?= .
 PROJECT_SOURCE_FILES  ?= \
-    raylib_game.cpp
+    raylib_game.cpp \
+    tinyfiledialogs.c
 
 # raylib library variables
 RAYLIB_PATH           ?= C:\raylib\raylib
@@ -105,15 +106,19 @@ endif
 # NOTE: Variable is still named CC (template convention), but it holds a C++ compiler
 #------------------------------------------------------------------------------------------------
 CC = g++
+# C compiler, used for plain C sources (e.g. tinyfiledialogs.c)
+C_CC = gcc
 
 ifeq ($(PLATFORM),PLATFORM_DESKTOP)
     ifeq ($(PLATFORM_OS),OSX)
         # OSX default compiler
         CC = clang++
+        C_CC = clang
     endif
     ifeq ($(PLATFORM_OS),BSD)
         # FreeBSD, OpenBSD, NetBSD, DragonFly default compiler
         CC = clang++
+        C_CC = clang
     endif
 endif
 ifeq ($(PLATFORM),PLATFORM_WEB)
@@ -121,12 +126,14 @@ ifeq ($(PLATFORM),PLATFORM_WEB)
     # WARNING: To compile to HTML5, code must be redesigned
     # to use emscripten.h and emscripten_set_main_loop()
     CC = em++
+    C_CC = emcc
 endif
 ifeq ($(PLATFORM),PLATFORM_DRM)
     ifeq ($(USE_RPI_CROSS_COMPILER),TRUE)
         # Define RPI cross-compiler
         #CC = armv6j-hardfloat-linux-gnueabi-g++
         CC = $(RPI_TOOLCHAIN)/bin/arm-linux-gnueabihf-g++
+        C_CC = $(RPI_TOOLCHAIN)/bin/arm-linux-gnueabihf-gcc
     endif
 endif
 
@@ -315,7 +322,7 @@ endif
 
 # Define all object files from source files
 #------------------------------------------------------------------------------------------------
-OBJS = $(patsubst %.cpp, %.o, $(PROJECT_SOURCE_FILES))
+OBJS = $(patsubst %.c, %.o, $(patsubst %.cpp, %.o, $(PROJECT_SOURCE_FILES)))
 
 # Define processes to execute
 #------------------------------------------------------------------------------------------------
@@ -340,6 +347,10 @@ $(PROJECT_NAME): $(OBJS)
 # NOTE: This pattern will compile every module defined on $(OBJS)
 %.o: %.cpp
 	$(CC) -c $< -o $@ $(CFLAGS) $(INCLUDE_PATHS) -D$(PLATFORM)
+
+# Compile plain C source files with the C compiler (drop the C++ -std flag)
+%.o: %.c
+	$(C_CC) -c $< -o $@ $(filter-out -std=%,$(CFLAGS)) $(INCLUDE_PATHS) -D$(PLATFORM)
 
 # Clean everything
 clean:

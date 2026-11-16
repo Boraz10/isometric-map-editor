@@ -12,7 +12,11 @@
 
 #include "raylib.h"
 
+#include "tinyfiledialogs.h"
+
 #include <iostream>
+
+#include <filesystem>
 
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h> // Emscripten library
@@ -46,6 +50,9 @@
 //----------------------------------------------------------------------------------
 // Types and structure definitinions
 //----------------------------------------------------------------------------------
+
+char const *tilesetPattern[1] = {"*.tileset"};
+
 typedef enum AppScreen
 {
     MAIN_MENU = 0,
@@ -53,14 +60,14 @@ typedef enum AppScreen
     LOAD_MENU = 2,
     SAVE_MENU = 3,
     EDITOR = 4
-
+    
 } AppScreen;
 
 typedef struct Vector2i
 {
     int x;
     int y;
-
+    
     Vector2i &operator+=(const Vector2i &other)
     {
         x += other.x;
@@ -82,8 +89,11 @@ static const int screenWidth = 800;
 static const int screenHeight = 450;
 
 // World and map data
-Vector2i worldSize = {50, 50};
+Vector2i worldSize = {30, 30};
 Vector2i origin = {5, 1};
+
+Color backgroundColor = RAYWHITE; //background color for the map
+
 
 int *pWorld = nullptr;         // 2D world array
 bool *pCollisionMap = nullptr; // 2D collsion map array
@@ -93,6 +103,8 @@ Texture2D tilesetTexture;
 int totalTiles;
 std::vector<TileDef> tileData; // Table for tileset. I need to do this manually it seems.
 Vector2i tileSize = {0, 0};
+const char *basicTilesetPath = "basic1.tileset"; // initialise with a pre-packed tileset
+int defaultTile = 0;
 
 // Position of the mouse, initialised to 0, 0 and updated every frame
 Vector2 mousePos = {0, 0};
@@ -114,22 +126,31 @@ const int intxt_FONT_SIZE = 22;
 
 const int LABEL_FONT_SIZE = 22;
 
-// debug text 
-const Vector2 DEBUG_TEXT_LOCATION = {230, 300};
-const int DEBUG_TEXT_SIZE = 20;
-const Color DEBUG_TEXT_COLOR = MAROON;
+// debug text
+const Vector2 ERROR_TEXT_LOCATION = {230, 300};
+const int ERROR_TEXT_SIZE = 20;
+const Color ERROR_TEXT_COLOR = MAROON;
+
+const Vector2 SUCCESS_TEXT_LOCATION = {230, 300};
+const int SUCCESS_TEXT_SIZE = 20;
+const Color SUCCESS_TEXT_COLOR = GREEN;
 
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
 //----------------------------------------------------------------------------------
 Vector2i toScreen(int x, int y);                                                                 // transform tile coordinate to screen coordinate, so we know where to draw it
-bool loadTileset(std::string fileName);                                                          // load a tileset from a tileset metadata file.
+bool loadTileset(std::string fileName, bool localPath = false);                                  // load a tileset from a tileset metadata file.
 void displayScreenTitle(const char *text);                                                       // Display a title at the centre top of the screen
 void drawButton(Rectangle &buttonRect, Color buttonColor, const char *buttonText, int textSize); // draw a button based on a rectangle, a color and some text
 Color updateButtonColor(bool hoverBool);                                                         // update a buttons color depending on if its hovered or clicked
 
-Color updateFieldColor(bool hoverBool);                                                         // update a fields color depending on if its hovered
-void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int& typedTextLetterCount, bool hovered, int framesCounter, bool isNumField=false); // draw a text field
+Color updateFieldColor(bool hoverBool);                                                                                                                                                                       // update a fields color depending on if its hovered
+void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int &typedTextLetterCount, bool hovered, int framesCounter, bool isNumField = false); // draw a text field
+
+void drawErrorText(const char *text);   // Draws errror text in a specific location
+void drawSuccessText(const char *text); // Draws success text in a specific location
+
+void initialiseNewWorld(Vector2i worldSize, int default_tile); // initilaise a new, empty world with a default tile.
 
 //----------------------------------------------------------------------------------
 // Program main entry point
@@ -172,18 +193,14 @@ int main(void)
         return 1;
     }
 
-    // Load tileset
-    if (!loadTileset("basic1.tileset"))
-    {
-        CloseWindow();
-        return 1;
-    }
+    // Tileset path
+    bool tilesetValid = false;
+    bool tilesetAttemptedOpen = false;
 
     const Rectangle rectDimensions = {0, 0, tileSize.x, tileSize.y};
 
     // Initialise world
-    pWorld = new int[worldSize.x * worldSize.y]{0};
-    pCollisionMap = new bool[worldSize.x * worldSize.y]{false};
+    initialiseNewWorld(worldSize, defaultTile);
 
     // Initialise mouse info
     Vector2i selected = {0, 0};
@@ -221,7 +238,7 @@ int main(void)
     // main menu
 
     bool main_isNewHovered = false;
-    bool main_isLoadHovered  = false;
+    bool main_isLoadHovered = false;
 
     Rectangle main_newButton = {(screenWidth / 4) - 150, (screenHeight / 2), 300, 40};
     Rectangle main_loadButton = {(screenWidth / 4) + 250, (screenHeight / 2), 300, 40};
@@ -236,8 +253,9 @@ int main(void)
     bool create_isNameFieldHovered = false;
     bool create_isWidthFieldHovered = false;
     bool create_isHeightFieldHovered = false;
-    bool create_isCreateButtonHovered = false;
+    bool create_isTileFileSelectorHovered = false;
 
+    bool create_isCreateButtonHovered = false;
 
     Rectangle create_nameField = {(screenWidth / 2) - (350 / 2), 90, 350, 40};
     char *create_nameFieldLabel = "Map Name:";
@@ -260,8 +278,19 @@ int main(void)
     int create_heightLetterCount = 0;
     Color create_heightFieldColor = intxt_MAIN_COLOR;
 
-    Rectangle create_tilesetField;
-    Rectangle create_defaultTileFiled;
+    Rectangle create_tilesetField{(screenWidth / 2) - 200, 210, 400, 40};
+    char *create_tilesetFieldText = "Click here to add tileset to use";
+    int create_tilesetFieldTextSize = MeasureText(create_tilesetFieldText, btn_FONT_SIZE);
+    Color create_tilesetFieldColor = intxt_MAIN_COLOR;
+
+    Rectangle create_colorSelectField = {(screenWidth / 2) - 150, 150, 60, 40};
+    char *create_colorSelectFieldLabel = "Background Color (HEX RGB):";
+    int create_colorSelectFieldLabelSize = MeasureText(create_heightFieldLabel, LABEL_FONT_SIZE);
+    char create_colorSelection[MAX_INPUT_NUM_CHARS + 1] = "\0";
+    int create_colorSelectionLetterCount = 0;
+    Color create_colorSelectColor = intxt_MAIN_COLOR;
+
+    Rectangle create_defaultTileField;
 
     Rectangle create_backgroundColorField;
 
@@ -308,9 +337,13 @@ int main(void)
             create_isWidthFieldHovered = CheckCollisionPointRec(mousePos, create_widthField);
             create_isHeightFieldHovered = CheckCollisionPointRec(mousePos, create_heightField);
             create_isCreateButtonHovered = CheckCollisionPointRec(mousePos, create_createButton);
+            create_isTileFileSelectorHovered = CheckCollisionPointRec(mousePos, create_tilesetField);
 
             create_createButtonColor = updateButtonColor(create_isCreateButtonHovered);
             create_nameFieldColor = updateFieldColor(create_isNameFieldHovered);
+            create_heightFieldColor = updateFieldColor(create_isHeightFieldHovered);
+            create_widthFieldColor = updateFieldColor(create_isWidthFieldHovered);
+            create_tilesetFieldColor = updateButtonColor(create_isTileFileSelectorHovered);
 
             // TODO: There may be a way to take some of this out into a function.
             if (create_isNameFieldHovered)
@@ -394,13 +427,51 @@ int main(void)
             else if (create_isCreateButtonHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
                 // create button is clicked
-                // TODO: We need to make sure input is correct, and then update variables accordingly
+                // If tileset was not selected, or its invalid, load the basic tileset
+                if (!tilesetValid) {
+                    if (!loadTileset(basicTilesetPath, true))
+                    {
+                        CloseWindow();
+                        return 1;
+                    }
+                }
+
+                // if size is invalid, set it to default: 20 x 20
+
                 currentScreen = EDITOR;
             }
-            else SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+            else
+                SetMouseCursor(MOUSE_CURSOR_DEFAULT);
 
-            if (create_isHeightFieldHovered || create_isWidthFieldHovered || create_isNameFieldHovered) framesCounter++;
-            else framesCounter = 0;
+            if (create_isHeightFieldHovered || create_isWidthFieldHovered || create_isNameFieldHovered)
+                framesCounter++;
+            else
+                framesCounter = 0;
+
+            if (create_isTileFileSelectorHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                tilesetAttemptedOpen = true;
+
+                // tile button is clicked, open a file dialogue
+                const char *pathTileset = tinyfd_openFileDialog("Select a tileset file", "", 1, tilesetPattern, ".tileset file", 0);
+
+                // verify file
+                if (pathTileset != NULL) {
+                    tilesetValid = loadTileset(pathTileset);
+                }
+            }
+            if (tilesetAttemptedOpen)
+            {
+                if (tilesetValid)
+                {
+                    drawSuccessText("Tileset loaded successfully");
+                }
+
+                else
+                {
+                    drawErrorText("Could not load tileset");
+                }
+            }
         }
         break;
         case LOAD_MENU:
@@ -528,18 +599,19 @@ int main(void)
                 displayScreenTitle("Create New Map");
 
                 // Name field
-                drawTextField(create_nameField, create_nameFieldColor, create_nameFieldLabel, create_nameFieldLabelSize, 
-                    create_name, create_nameLetterCount, create_isNameFieldHovered, framesCounter);
+                drawTextField(create_nameField, create_nameFieldColor, create_nameFieldLabel, create_nameFieldLabelSize,
+                              create_name, create_nameLetterCount, create_isNameFieldHovered, framesCounter);
 
                 // Height field
-                drawTextField(create_heightField, create_heightFieldColor, create_heightFieldLabel, create_heightFieldLabelSize, 
-                    create_height, create_heightLetterCount, create_isHeightFieldHovered, framesCounter, true);
+                drawTextField(create_heightField, create_heightFieldColor, create_heightFieldLabel, create_heightFieldLabelSize,
+                              create_height, create_heightLetterCount, create_isHeightFieldHovered, framesCounter, true);
 
                 // width field
-                drawTextField(create_widthField, create_widthFieldColor, create_widthFieldLabel, create_widthFieldLabelSize, 
-                    create_width, create_widthLetterCount, create_isWidthFieldHovered, framesCounter, true);
+                drawTextField(create_widthField, create_widthFieldColor, create_widthFieldLabel, create_widthFieldLabelSize,
+                              create_width, create_widthLetterCount, create_isWidthFieldHovered, framesCounter, true);
 
-
+                // Tileset file input
+                drawButton(create_tilesetField, create_tilesetFieldColor, create_tilesetFieldText, create_tilesetFieldTextSize);
 
                 // Create button
                 drawButton(create_createButton, create_createButtonColor, create_createButtonText, create_createButtonTextSize);
@@ -657,15 +729,27 @@ Vector2i toScreen(int x, int y)
     };
 }
 
-bool loadTileset(std::string fileName)
+bool loadTileset(std::string fileName, bool localPath)
 {
-    std::string dir = std::string(GetApplicationDirectory()) + "resources/tilesets/";
+    std::string dir = "";
+    std::string localFileName = "";
+    if (localPath)
+    {
+        dir = std::string(GetApplicationDirectory()) + "resources/tilesets/";
+        localFileName = fileName;
+    }
+    else
+    {
+        std::filesystem::path p(fileName);
+        dir = p.parent_path().string() + "/";
+        localFileName = p.filename().string();
+    }
 
-    std::ifstream file(dir + fileName);
+    std::ifstream file(dir + localFileName);
 
     if (!file.is_open())
     {
-        TraceLog(LOG_ERROR, "Could not open tileset file: %s", (dir + fileName).c_str());
+        TraceLog(LOG_ERROR, "Could not open tileset file: %s", (dir + localFileName).c_str());
         return false;
     }
 
@@ -742,11 +826,13 @@ Color updateButtonColor(bool hoverBool)
 
 Color updateFieldColor(bool hoverBool)
 {
-    if (hoverBool) return intxt_HOVER_COLOR;
+    if (hoverBool)
+        return intxt_HOVER_COLOR;
     return intxt_MAIN_COLOR;
 }
 
-void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int& typedTextLetterCount, bool hovered, int framesCounter, bool isNumField) {
+void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int &typedTextLetterCount, bool hovered, int framesCounter, bool isNumField)
+{
     int max_chars = (isNumField) ? MAX_INPUT_NUM_CHARS : MAX_INPUT_CHARS;
 
     DrawText(labelText, fieldRect.x - labelSize - 10, fieldRect.y + 5, LABEL_FONT_SIZE, BLACK);
@@ -760,10 +846,26 @@ void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText
     {
         if (typedTextLetterCount < max_chars)
         {
-            if (((framesCounter/20)%2) == 0) DrawText("_", (int)fieldRect.x + 8 + MeasureText(typedText, intxt_FONT_SIZE), (int)fieldRect.y + 12, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
+            if (((framesCounter / 20) % 2) == 0)
+                DrawText("_", (int)fieldRect.x + 8 + MeasureText(typedText, intxt_FONT_SIZE), (int)fieldRect.y + 12, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
         }
         // TODO: I should probably take this out into a function
-        else DrawText("Reached Character Limit", DEBUG_TEXT_LOCATION.x, DEBUG_TEXT_LOCATION.y, DEBUG_TEXT_SIZE, DEBUG_TEXT_COLOR);
+        else
+            drawErrorText("Reached Character Limit");
     }
+}
 
+void drawErrorText(const char *text)
+{
+    DrawText(text, ERROR_TEXT_LOCATION.x, ERROR_TEXT_LOCATION.y, ERROR_TEXT_SIZE, ERROR_TEXT_COLOR);
+}
+
+void drawSuccessText(const char *text)
+{
+    DrawText(text, SUCCESS_TEXT_LOCATION.x, SUCCESS_TEXT_LOCATION.y, SUCCESS_TEXT_SIZE, SUCCESS_TEXT_COLOR);
+}
+
+void initialiseNewWorld(Vector2i worldSize, int defaultTile) {
+    pWorld = new int[worldSize.x * worldSize.y]{ defaultTile };
+    pCollisionMap = new bool[worldSize.x * worldSize.y]{false};
 }
