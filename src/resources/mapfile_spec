@@ -1,0 +1,4 @@
+map_name
+tileset
+width height
+2d array of block_num (from tileset) collision (0 or 1)... (each line will be a row)
