@@ -28,6 +28,9 @@
 #include <algorithm>
 #include <cmath>
 
+#define MAX_INPUT_CHARS 30
+#define MAX_INPUT_NUM_CHARS 3 // (999x999)
+
 //----------------------------------------------------------------------------------
 // Defines and Macros
 //----------------------------------------------------------------------------------
@@ -104,9 +107,11 @@ const int btn_FONT_SIZE = 20;
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
 //----------------------------------------------------------------------------------
-Vector2i toScreen(int x, int y);        // transform tile coordinate to screen coordinate, so we know where to draw it
-bool loadTileset(std::string fileName); // load a tileset from a tileset metadata file.
-void displayScreenTitle(const char* text); // Display a title at the centre top of the screen
+Vector2i toScreen(int x, int y);                                                                 // transform tile coordinate to screen coordinate, so we know where to draw it
+bool loadTileset(std::string fileName);                                                          // load a tileset from a tileset metadata file.
+void displayScreenTitle(const char *text);                                                       // Display a title at the centre top of the screen
+void drawButton(Rectangle &buttonRect, Color buttonColor, const char *buttonText, int textSize); // draw a button based on a rectangle, a color and some text
+Color updateButtonColor(bool hoverBool);                                                         // update a buttons color depending on if its hovered or clicked
 
 //----------------------------------------------------------------------------------
 // Program main entry point
@@ -119,6 +124,8 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "Map making program");
     AppScreen currentScreen = MAIN_MENU;
     SetTargetFPS(60);
+
+    int framesCounter = 0;
 
     // Load cursor and cheat tiles seperately.
     // TODO: Make this whole secion a lot cleaner.
@@ -193,15 +200,41 @@ int main(void)
     Color main_newButtonColor = btn_MAIN_COLOR;
     Color main_loadButtonColor = btn_MAIN_COLOR;
 
+    // main menu
     Rectangle main_newButton = {(screenWidth / 4) - 150, (screenHeight / 2), 300, 40};
     Rectangle main_loadButton = {(screenWidth / 4) + 250, (screenHeight / 2), 300, 40};
 
-    const char* main_newButtonText = "Create New";
-    const char* main_loadButtonText = "Load Map";
+    const char *main_newButtonText = "Create New";
+    const char *main_loadButtonText = "Load Map";
 
     int main_newButtonTextSize = MeasureText(main_newButtonText, btn_FONT_SIZE);
     int main_loadButtonTextSize = MeasureText(main_loadButtonText, btn_FONT_SIZE);
 
+    // Create menu
+    Rectangle create_nameField = {(screenWidth / 2) + 200, 70, 300, 40};
+    char *create_nameFieldLabel = "Map Name:";
+    char create_name[MAX_INPUT_CHARS + 1] = "\0";
+    int create_nameLetterCount = 0;
+
+    Rectangle create_widthField = {(screenWidth / 2) - 300, 100, 300, 40};
+    char *create_widthFieldLabel = "Width:";
+    char create_width[MAX_INPUT_NUM_CHARS + 1] = "\0";
+    int create_widthLetterCount = 0;
+
+    Rectangle create_heightField = {(screenWidth / 2) + 300, 100, 300, 40};
+    char *create_heightFieldLabel = "Height:";
+    char create_height[MAX_INPUT_NUM_CHARS + 1] = "\0";
+    int create_heightLetterCount = 0;
+
+    Rectangle create_tilesetField;
+    Rectangle create_defaultTileFiled;
+
+    Rectangle create_backgroundColorField;
+
+    Rectangle create_createButton = {(screenWidth / 2) + 300, screenHeight - 50, 300, 40};
+    const char *create_createButtonText = "Create New Map";
+    int create_createButtonTextSize = MeasureText(create_createButtonText, btn_FONT_SIZE);
+    Color create_createButtonColor = btn_MAIN_COLOR;
 
     //---------------------------------------------------------
     // Main Loop
@@ -219,34 +252,119 @@ int main(void)
             bool isNewHovered = CheckCollisionPointRec(mousePos, main_newButton);
             bool isLoadHovered = CheckCollisionPointRec(mousePos, main_loadButton);
 
-            if (isNewHovered) {
-                main_newButtonColor = (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) ? btn_DOWN_COLOR : btn_HOVER_COLOR;
+            main_newButtonColor = updateButtonColor(isNewHovered);
+            main_loadButtonColor = updateButtonColor(isLoadHovered);
 
+            if (isNewHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
                 // create button is clicked
-                if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-                   currentScreen = CREATE_MENU;
-                }
-
-            } else {
-                main_newButtonColor = btn_MAIN_COLOR;
+                currentScreen = CREATE_MENU;
             }
 
-            if (isLoadHovered) {
-                main_loadButtonColor = (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) ? btn_DOWN_COLOR : btn_HOVER_COLOR;
-
+            if (isLoadHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
                 // load button is clicked
-                if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-                   currentScreen = LOAD_MENU;
-                }
-
-            } else {
-                main_loadButtonColor = btn_MAIN_COLOR;
+                currentScreen = LOAD_MENU;
             }
-
         }
         break;
         case CREATE_MENU:
         {
+            bool isNameFieldHovered = CheckCollisionPointRec(mousePos, create_nameField);
+            bool isWidthFieldHovered = CheckCollisionPointRec(mousePos, create_widthField);
+            bool isHeightFieldHovered = CheckCollisionPointRec(mousePos, create_heightField);
+            bool isCreateButtonHovered = CheckCollisionPointRec(mousePos, create_createButton);
+
+            create_createButtonColor = updateButtonColor(isCreateButtonHovered);
+
+            if (isNameFieldHovered)
+            {
+                SetMouseCursor(MOUSE_CURSOR_IBEAM);
+
+                int key = GetCharPressed();
+                while (key > 0)
+                {
+                    // NOTE: Only allow keys in range [32..125]
+                    if ((key >= 32) && (key <= 125) && (create_nameLetterCount < MAX_INPUT_CHARS))
+                    {
+                        create_name[create_nameLetterCount] = (char)key;
+                        create_name[create_nameLetterCount + 1] = '\0';
+                        create_nameLetterCount++;
+                    }
+
+                    key = GetCharPressed(); // Check next character in the queue
+                }
+
+                if (IsKeyPressed(KEY_BACKSPACE))
+                {
+                    create_nameLetterCount--;
+                    if (create_nameLetterCount < 0)
+                        create_nameLetterCount = 0;
+                    create_name[create_nameLetterCount] = '\0';
+                }
+            }
+
+            if (isWidthFieldHovered)
+            {
+                SetMouseCursor(MOUSE_CURSOR_IBEAM);
+                int key = GetCharPressed();
+                while (key > 0)
+                {
+                    // NOTE: Only allow keys in range [48..57], which is 0 - 9
+                    if ((key >= 48) && (key <= 57) && (create_nameLetterCount < MAX_INPUT_NUM_CHARS))
+                    {
+                        create_width[create_widthLetterCount] = (char)key;
+                        create_width[create_widthLetterCount + 1] = '\0';
+                        create_widthLetterCount++;
+                    }
+
+                    key = GetCharPressed(); // Check next character in the queue
+                }
+
+                if (IsKeyPressed(KEY_BACKSPACE))
+                {
+                    create_widthLetterCount--;
+                    if (create_widthLetterCount < 0)
+                        create_widthLetterCount = 0;
+                    create_width[create_widthLetterCount] = '\0';
+                }
+            }
+            else if (isHeightFieldHovered)
+            {
+                SetMouseCursor(MOUSE_CURSOR_IBEAM);
+                int key = GetCharPressed();
+                while (key > 0)
+                {
+                    // NOTE: Only allow keys in range [48..57], which is 0 - 9
+                    if ((key >= 48) && (key <= 57) && (create_nameLetterCount < MAX_INPUT_NUM_CHARS))
+                    {
+                        create_height[create_heightLetterCount] = (char)key;
+                        create_height[create_heightLetterCount + 1] = '\0';
+                        create_heightLetterCount++;
+                    }
+
+                    key = GetCharPressed(); // Check next character in the queue
+                }
+
+                if (IsKeyPressed(KEY_BACKSPACE))
+                {
+                    create_heightLetterCount--;
+                    if (create_heightLetterCount < 0)
+                        create_heightLetterCount = 0;
+                    create_height[create_heightLetterCount] = '\0';
+                }
+            }
+
+            else if (isCreateButtonHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                // create button is clicked
+                // TODO: We need to make sure input is correct, and then update variables accordingly
+                currentScreen = EDITOR;
+            }
+            else SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+
+            if (isHeightFieldHovered || isWidthFieldHovered || isNameFieldHovered) framesCounter++;
+            else framesCounter = 0;
         }
         break;
         case LOAD_MENU:
@@ -358,34 +476,43 @@ int main(void)
             {
             case MAIN_MENU:
             {
+                // Screen Title Text
                 displayScreenTitle("Isometric Map Editor");
 
                 // Create button
-                DrawRectangleRec(main_newButton, main_newButtonColor);
-                DrawRectangleLinesEx(main_newButton, 2, BLACK);
-                DrawText(main_newButtonText, (main_newButton.x + (main_newButton.width - main_newButtonTextSize) / 2), main_newButton.y + 10, 20, BLACK);
+                drawButton(main_newButton, main_newButtonColor, main_newButtonText, main_newButtonTextSize);
 
                 // Load button
-                DrawRectangleRec(main_loadButton, main_loadButtonColor);
-                DrawRectangleLinesEx(main_loadButton, 2, BLACK);
-                DrawText(main_loadButtonText, (main_loadButton.x + (main_loadButton.width - main_loadButtonTextSize) / 2), main_loadButton.y + 10, 20, BLACK);
+                drawButton(main_loadButton, main_loadButtonColor, main_loadButtonText, main_loadButtonTextSize);
             }
-            break;            
+            break;
             case CREATE_MENU:
             {
+                // Screen Title Text
                 displayScreenTitle("Create New Map");
+
+                // Name text field
+                DrawText(create_nameFieldLabel, create_nameField.x, create_nameField.y - 100, 20, BLACK);
+                DrawRectangleRec(create_nameField, LIGHTGRAY);
+                DrawRectangleLinesEx(create_nameField, 2.0, BLACK);
+
+                DrawText(create_name, (int)create_nameField.x + 5, (int)create_nameField.y + 8, 40, MAROON);
+                // Create button
+                drawButton(create_createButton, create_createButtonColor, create_createButtonText, create_createButtonTextSize);
             }
             break;
             case LOAD_MENU:
             {
+                // Screen Title Text
                 displayScreenTitle("Load Existing Map");
             }
             break;
             case SAVE_MENU:
             {
+                // Screen Title Text
                 displayScreenTitle("Save map");
             }
-            break;      
+            break;
             case EDITOR:
             {
                 BeginMode2D(camera);
@@ -542,10 +669,29 @@ bool loadTileset(std::string fileName)
     return totalTiles > 0;
 }
 
-void displayScreenTitle(const char* text) {
+void displayScreenTitle(const char *text)
+{
     int titleFontSize = 30;
     int textWidth = MeasureText(text, titleFontSize);
     Vector2 titlePos = {(screenWidth - textWidth) / 2, 40};
 
     DrawText(text, titlePos.x, titlePos.y, titleFontSize, BLACK);
+}
+
+void drawButton(Rectangle &buttonRect, Color buttonColor, const char *buttonText, int textSize)
+{
+    // width and height are consistent
+    DrawRectangleRec(buttonRect, buttonColor);
+    DrawRectangleLinesEx(buttonRect, 2, BLACK);
+    DrawText(buttonText, (buttonRect.x + (buttonRect.width - textSize) / 2), buttonRect.y + 10, 20, BLACK);
+}
+
+Color updateButtonColor(bool hoverBool)
+{
+    if (hoverBool)
+    {
+        return (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) ? btn_DOWN_COLOR : btn_HOVER_COLOR;
+    }
+
+    return btn_MAIN_COLOR;
 }
