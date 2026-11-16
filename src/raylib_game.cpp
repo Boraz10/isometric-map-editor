@@ -34,6 +34,7 @@
 
 #define MAX_INPUT_CHARS 27
 #define MAX_INPUT_NUM_CHARS 3 // (999x999)
+#define MAX_INPUT_HEX_CHARS 6 // FFFFFF
 
 //----------------------------------------------------------------------------------
 // Defines and Macros
@@ -145,7 +146,7 @@ void drawButton(Rectangle &buttonRect, Color buttonColor, const char *buttonText
 Color updateButtonColor(bool hoverBool);                                                         // update a buttons color depending on if its hovered or clicked
 
 Color updateFieldColor(bool hoverBool);                                                                                                                                                                       // update a fields color depending on if its hovered
-void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int &typedTextLetterCount, bool hovered, int framesCounter, bool isNumField = false); // draw a text field
+void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int &typedTextLetterCount, bool hovered, int framesCounter, int fieldType = 0); // draw a text field
 
 void drawErrorText(const char *text);   // Draws errror text in a specific location
 void drawSuccessText(const char *text); // Draws success text in a specific location
@@ -254,6 +255,7 @@ int main(void)
     bool create_isWidthFieldHovered = false;
     bool create_isHeightFieldHovered = false;
     bool create_isTileFileSelectorHovered = false;
+    bool create_isColorSelectHovered = false;
 
     bool create_isCreateButtonHovered = false;
 
@@ -279,16 +281,16 @@ int main(void)
     Color create_heightFieldColor = intxt_MAIN_COLOR;
 
     Rectangle create_tilesetField{(screenWidth / 2) - 200, 210, 400, 40};
-    char *create_tilesetFieldText = "Click here to add tileset to use";
-    int create_tilesetFieldTextSize = MeasureText(create_tilesetFieldText, btn_FONT_SIZE);
-    Color create_tilesetFieldColor = intxt_MAIN_COLOR;
+    std::string create_tilesetFieldText = "Click here to add tileset to use";
+    int create_tilesetFieldTextSize = MeasureText(create_tilesetFieldText.c_str(), btn_FONT_SIZE);
+    Color create_tilesetFieldColor = btn_MAIN_COLOR;
 
-    Rectangle create_colorSelectField = {(screenWidth / 2) - 150, 150, 60, 40};
+    Rectangle create_colorSelectField = {(screenWidth / 2) + 50, 270, 150, 40};
     char *create_colorSelectFieldLabel = "Background Color (HEX RGB):";
-    int create_colorSelectFieldLabelSize = MeasureText(create_heightFieldLabel, LABEL_FONT_SIZE);
-    char create_colorSelection[MAX_INPUT_NUM_CHARS + 1] = "\0";
+    int create_colorSelectFieldLabelSize = MeasureText(create_colorSelectFieldLabel, LABEL_FONT_SIZE);
+    char create_colorSelection[MAX_INPUT_HEX_CHARS + 1] = "\0";
     int create_colorSelectionLetterCount = 0;
-    Color create_colorSelectColor = intxt_MAIN_COLOR;
+    Color create_colorSelectFieldColor = intxt_MAIN_COLOR;
 
     Rectangle create_defaultTileField;
 
@@ -338,12 +340,14 @@ int main(void)
             create_isHeightFieldHovered = CheckCollisionPointRec(mousePos, create_heightField);
             create_isCreateButtonHovered = CheckCollisionPointRec(mousePos, create_createButton);
             create_isTileFileSelectorHovered = CheckCollisionPointRec(mousePos, create_tilesetField);
+            create_isColorSelectHovered = CheckCollisionPointRec(mousePos, create_colorSelectField);
 
             create_createButtonColor = updateButtonColor(create_isCreateButtonHovered);
             create_nameFieldColor = updateFieldColor(create_isNameFieldHovered);
             create_heightFieldColor = updateFieldColor(create_isHeightFieldHovered);
             create_widthFieldColor = updateFieldColor(create_isWidthFieldHovered);
             create_tilesetFieldColor = updateButtonColor(create_isTileFileSelectorHovered);
+            create_colorSelectFieldColor = updateFieldColor(create_isColorSelectHovered);
 
             // TODO: There may be a way to take some of this out into a function.
             if (create_isNameFieldHovered)
@@ -424,6 +428,33 @@ int main(void)
                 }
             }
 
+             else if (create_isColorSelectHovered)
+            {
+
+                SetMouseCursor(MOUSE_CURSOR_IBEAM);
+                int key = GetCharPressed();
+                while (key > 0)
+                {
+                    // NOTE: Only allow keys in range [48..57], and  which is 0 - 9, and 65 - 70 which is A - F
+                    if ((((key >= 48) && (key <= 57)) || ((key >= 65) && (key <= 70))) && (create_colorSelectionLetterCount < MAX_INPUT_HEX_CHARS))
+                    {
+                        create_colorSelection[create_colorSelectionLetterCount] = (char)key;
+                        create_colorSelection[create_colorSelectionLetterCount + 1] = '\0';
+                        create_colorSelectionLetterCount++;
+                    }
+
+                    key = GetCharPressed(); // Check next character in the queue
+                }
+
+                if (IsKeyPressed(KEY_BACKSPACE))
+                {
+                    create_colorSelectionLetterCount--;
+                    if (create_colorSelectionLetterCount < 0)
+                        create_colorSelectionLetterCount = 0;
+                    create_colorSelection[create_colorSelectionLetterCount] = '\0';
+                }
+            }
+
             else if (create_isCreateButtonHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
                 // create button is clicked
@@ -458,6 +489,8 @@ int main(void)
                 // verify file
                 if (pathTileset != NULL) {
                     tilesetValid = loadTileset(pathTileset);
+                    create_tilesetFieldText = std::filesystem::path(pathTileset).filename().string();
+                    create_tilesetFieldTextSize = MeasureText(create_tilesetFieldText.c_str(), btn_FONT_SIZE);
                 }
             }
             if (tilesetAttemptedOpen)
@@ -472,6 +505,8 @@ int main(void)
                     drawErrorText("Could not load tileset");
                 }
             }
+
+
         }
         break;
         case LOAD_MENU:
@@ -604,14 +639,18 @@ int main(void)
 
                 // Height field
                 drawTextField(create_heightField, create_heightFieldColor, create_heightFieldLabel, create_heightFieldLabelSize,
-                              create_height, create_heightLetterCount, create_isHeightFieldHovered, framesCounter, true);
+                              create_height, create_heightLetterCount, create_isHeightFieldHovered, framesCounter, 1);
 
                 // width field
                 drawTextField(create_widthField, create_widthFieldColor, create_widthFieldLabel, create_widthFieldLabelSize,
-                              create_width, create_widthLetterCount, create_isWidthFieldHovered, framesCounter, true);
+                              create_width, create_widthLetterCount, create_isWidthFieldHovered, framesCounter, 1);
 
                 // Tileset file input
-                drawButton(create_tilesetField, create_tilesetFieldColor, create_tilesetFieldText, create_tilesetFieldTextSize);
+                drawButton(create_tilesetField, create_tilesetFieldColor, create_tilesetFieldText.c_str(), create_tilesetFieldTextSize);
+
+                // Color select field
+                drawTextField(create_colorSelectField, create_colorSelectFieldColor, create_colorSelectFieldLabel, create_colorSelectFieldLabelSize,
+                              create_colorSelection, create_colorSelectionLetterCount, create_isColorSelectHovered, framesCounter, 2);
 
                 // Create button
                 drawButton(create_createButton, create_createButtonColor, create_createButtonText, create_createButtonTextSize);
@@ -831,9 +870,12 @@ Color updateFieldColor(bool hoverBool)
     return intxt_MAIN_COLOR;
 }
 
-void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int &typedTextLetterCount, bool hovered, int framesCounter, bool isNumField)
+void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int &typedTextLetterCount, bool hovered, int framesCounter, int fieldType)
 {
-    int max_chars = (isNumField) ? MAX_INPUT_NUM_CHARS : MAX_INPUT_CHARS;
+    // field type: 0 = Normal text, 1 = number input, 2 = hex input
+    int max_chars = (fieldType == 0) ? MAX_INPUT_CHARS : 
+                    (fieldType == 1) ? MAX_INPUT_NUM_CHARS :
+                    MAX_INPUT_HEX_CHARS;
 
     DrawText(labelText, fieldRect.x - labelSize - 10, fieldRect.y + 5, LABEL_FONT_SIZE, BLACK);
     DrawRectangleRec(fieldRect, fieldColor);
@@ -849,7 +891,6 @@ void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText
             if (((framesCounter / 20) % 2) == 0)
                 DrawText("_", (int)fieldRect.x + 8 + MeasureText(typedText, intxt_FONT_SIZE), (int)fieldRect.y + 12, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
         }
-        // TODO: I should probably take this out into a function
         else
             drawErrorText("Reached Character Limit");
     }
