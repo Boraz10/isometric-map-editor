@@ -28,7 +28,7 @@
 #include <algorithm>
 #include <cmath>
 
-#define MAX_INPUT_CHARS 30
+#define MAX_INPUT_CHARS 27
 #define MAX_INPUT_NUM_CHARS 3 // (999x999)
 
 //----------------------------------------------------------------------------------
@@ -104,6 +104,21 @@ const Color btn_DOWN_COLOR = DARKGRAY;
 
 const int btn_FONT_SIZE = 20;
 
+// Text field color definitions
+const Color intxt_MAIN_COLOR = GRAY;
+const Color intxt_HOVER_COLOR = DARKGRAY;
+
+const Color TYPING_TEXT_COLOR = BLACK;
+
+const int intxt_FONT_SIZE = 22;
+
+const int LABEL_FONT_SIZE = 22;
+
+// debug text 
+const Vector2 DEBUG_TEXT_LOCATION = {230, 300};
+const int DEBUG_TEXT_SIZE = 20;
+const Color DEBUG_TEXT_COLOR = MAROON;
+
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
 //----------------------------------------------------------------------------------
@@ -112,6 +127,9 @@ bool loadTileset(std::string fileName);                                         
 void displayScreenTitle(const char *text);                                                       // Display a title at the centre top of the screen
 void drawButton(Rectangle &buttonRect, Color buttonColor, const char *buttonText, int textSize); // draw a button based on a rectangle, a color and some text
 Color updateButtonColor(bool hoverBool);                                                         // update a buttons color depending on if its hovered or clicked
+
+Color updateFieldColor(bool hoverBool);                                                         // update a fields color depending on if its hovered
+void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int& typedTextLetterCount, bool hovered, int framesCounter, bool isNumField=false); // draw a text field
 
 //----------------------------------------------------------------------------------
 // Program main entry point
@@ -201,6 +219,10 @@ int main(void)
     Color main_loadButtonColor = btn_MAIN_COLOR;
 
     // main menu
+
+    bool main_isNewHovered = false;
+    bool main_isLoadHovered  = false;
+
     Rectangle main_newButton = {(screenWidth / 4) - 150, (screenHeight / 2), 300, 40};
     Rectangle main_loadButton = {(screenWidth / 4) + 250, (screenHeight / 2), 300, 40};
 
@@ -211,27 +233,39 @@ int main(void)
     int main_loadButtonTextSize = MeasureText(main_loadButtonText, btn_FONT_SIZE);
 
     // Create menu
-    Rectangle create_nameField = {(screenWidth / 2) + 200, 70, 300, 40};
+    bool create_isNameFieldHovered = false;
+    bool create_isWidthFieldHovered = false;
+    bool create_isHeightFieldHovered = false;
+    bool create_isCreateButtonHovered = false;
+
+
+    Rectangle create_nameField = {(screenWidth / 2) - (350 / 2), 90, 350, 40};
     char *create_nameFieldLabel = "Map Name:";
+    int create_nameFieldLabelSize = MeasureText(create_nameFieldLabel, LABEL_FONT_SIZE);
     char create_name[MAX_INPUT_CHARS + 1] = "\0";
     int create_nameLetterCount = 0;
+    Color create_nameFieldColor = intxt_MAIN_COLOR;
 
-    Rectangle create_widthField = {(screenWidth / 2) - 300, 100, 300, 40};
+    Rectangle create_widthField = {(screenWidth / 2) + 80, 150, 60, 40};
     char *create_widthFieldLabel = "Width:";
+    int create_widthFieldLabelSize = MeasureText(create_widthFieldLabel, LABEL_FONT_SIZE);
     char create_width[MAX_INPUT_NUM_CHARS + 1] = "\0";
     int create_widthLetterCount = 0;
+    Color create_widthFieldColor = intxt_MAIN_COLOR;
 
-    Rectangle create_heightField = {(screenWidth / 2) + 300, 100, 300, 40};
+    Rectangle create_heightField = {(screenWidth / 2) - 150, 150, 60, 40};
     char *create_heightFieldLabel = "Height:";
+    int create_heightFieldLabelSize = MeasureText(create_heightFieldLabel, LABEL_FONT_SIZE);
     char create_height[MAX_INPUT_NUM_CHARS + 1] = "\0";
     int create_heightLetterCount = 0;
+    Color create_heightFieldColor = intxt_MAIN_COLOR;
 
     Rectangle create_tilesetField;
     Rectangle create_defaultTileFiled;
 
     Rectangle create_backgroundColorField;
 
-    Rectangle create_createButton = {(screenWidth / 2) + 300, screenHeight - 50, 300, 40};
+    Rectangle create_createButton = {(screenWidth / 2) - 150, screenHeight - 50, 300, 40};
     const char *create_createButtonText = "Create New Map";
     int create_createButtonTextSize = MeasureText(create_createButtonText, btn_FONT_SIZE);
     Color create_createButtonColor = btn_MAIN_COLOR;
@@ -249,19 +283,19 @@ int main(void)
         {
         case MAIN_MENU:
         {
-            bool isNewHovered = CheckCollisionPointRec(mousePos, main_newButton);
-            bool isLoadHovered = CheckCollisionPointRec(mousePos, main_loadButton);
+            main_isNewHovered = CheckCollisionPointRec(mousePos, main_newButton);
+            main_isLoadHovered = CheckCollisionPointRec(mousePos, main_loadButton);
 
-            main_newButtonColor = updateButtonColor(isNewHovered);
-            main_loadButtonColor = updateButtonColor(isLoadHovered);
+            main_newButtonColor = updateButtonColor(main_isNewHovered);
+            main_loadButtonColor = updateButtonColor(main_isLoadHovered);
 
-            if (isNewHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            if (main_isNewHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
                 // create button is clicked
                 currentScreen = CREATE_MENU;
             }
 
-            if (isLoadHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            if (main_isLoadHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
                 // load button is clicked
                 currentScreen = LOAD_MENU;
@@ -270,14 +304,16 @@ int main(void)
         break;
         case CREATE_MENU:
         {
-            bool isNameFieldHovered = CheckCollisionPointRec(mousePos, create_nameField);
-            bool isWidthFieldHovered = CheckCollisionPointRec(mousePos, create_widthField);
-            bool isHeightFieldHovered = CheckCollisionPointRec(mousePos, create_heightField);
-            bool isCreateButtonHovered = CheckCollisionPointRec(mousePos, create_createButton);
+            create_isNameFieldHovered = CheckCollisionPointRec(mousePos, create_nameField);
+            create_isWidthFieldHovered = CheckCollisionPointRec(mousePos, create_widthField);
+            create_isHeightFieldHovered = CheckCollisionPointRec(mousePos, create_heightField);
+            create_isCreateButtonHovered = CheckCollisionPointRec(mousePos, create_createButton);
 
-            create_createButtonColor = updateButtonColor(isCreateButtonHovered);
+            create_createButtonColor = updateButtonColor(create_isCreateButtonHovered);
+            create_nameFieldColor = updateFieldColor(create_isNameFieldHovered);
 
-            if (isNameFieldHovered)
+            // TODO: There may be a way to take some of this out into a function.
+            if (create_isNameFieldHovered)
             {
                 SetMouseCursor(MOUSE_CURSOR_IBEAM);
 
@@ -304,14 +340,14 @@ int main(void)
                 }
             }
 
-            if (isWidthFieldHovered)
+            else if (create_isWidthFieldHovered)
             {
                 SetMouseCursor(MOUSE_CURSOR_IBEAM);
                 int key = GetCharPressed();
                 while (key > 0)
                 {
                     // NOTE: Only allow keys in range [48..57], which is 0 - 9
-                    if ((key >= 48) && (key <= 57) && (create_nameLetterCount < MAX_INPUT_NUM_CHARS))
+                    if ((key >= 48) && (key <= 57) && (create_widthLetterCount < MAX_INPUT_NUM_CHARS))
                     {
                         create_width[create_widthLetterCount] = (char)key;
                         create_width[create_widthLetterCount + 1] = '\0';
@@ -329,14 +365,14 @@ int main(void)
                     create_width[create_widthLetterCount] = '\0';
                 }
             }
-            else if (isHeightFieldHovered)
+            else if (create_isHeightFieldHovered)
             {
                 SetMouseCursor(MOUSE_CURSOR_IBEAM);
                 int key = GetCharPressed();
                 while (key > 0)
                 {
                     // NOTE: Only allow keys in range [48..57], which is 0 - 9
-                    if ((key >= 48) && (key <= 57) && (create_nameLetterCount < MAX_INPUT_NUM_CHARS))
+                    if ((key >= 48) && (key <= 57) && (create_heightLetterCount < MAX_INPUT_NUM_CHARS))
                     {
                         create_height[create_heightLetterCount] = (char)key;
                         create_height[create_heightLetterCount + 1] = '\0';
@@ -355,7 +391,7 @@ int main(void)
                 }
             }
 
-            else if (isCreateButtonHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            else if (create_isCreateButtonHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
             {
                 // create button is clicked
                 // TODO: We need to make sure input is correct, and then update variables accordingly
@@ -363,7 +399,7 @@ int main(void)
             }
             else SetMouseCursor(MOUSE_CURSOR_DEFAULT);
 
-            if (isHeightFieldHovered || isWidthFieldHovered || isNameFieldHovered) framesCounter++;
+            if (create_isHeightFieldHovered || create_isWidthFieldHovered || create_isNameFieldHovered) framesCounter++;
             else framesCounter = 0;
         }
         break;
@@ -491,12 +527,20 @@ int main(void)
                 // Screen Title Text
                 displayScreenTitle("Create New Map");
 
-                // Name text field
-                DrawText(create_nameFieldLabel, create_nameField.x, create_nameField.y - 100, 20, BLACK);
-                DrawRectangleRec(create_nameField, LIGHTGRAY);
-                DrawRectangleLinesEx(create_nameField, 2.0, BLACK);
+                // Name field
+                drawTextField(create_nameField, create_nameFieldColor, create_nameFieldLabel, create_nameFieldLabelSize, 
+                    create_name, create_nameLetterCount, create_isNameFieldHovered, framesCounter);
 
-                DrawText(create_name, (int)create_nameField.x + 5, (int)create_nameField.y + 8, 40, MAROON);
+                // Height field
+                drawTextField(create_heightField, create_heightFieldColor, create_heightFieldLabel, create_heightFieldLabelSize, 
+                    create_height, create_heightLetterCount, create_isHeightFieldHovered, framesCounter, true);
+
+                // width field
+                drawTextField(create_widthField, create_widthFieldColor, create_widthFieldLabel, create_widthFieldLabelSize, 
+                    create_width, create_widthLetterCount, create_isWidthFieldHovered, framesCounter, true);
+
+
+
                 // Create button
                 drawButton(create_createButton, create_createButtonColor, create_createButtonText, create_createButtonTextSize);
             }
@@ -694,4 +738,32 @@ Color updateButtonColor(bool hoverBool)
     }
 
     return btn_MAIN_COLOR;
+}
+
+Color updateFieldColor(bool hoverBool)
+{
+    if (hoverBool) return intxt_HOVER_COLOR;
+    return intxt_MAIN_COLOR;
+}
+
+void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int& typedTextLetterCount, bool hovered, int framesCounter, bool isNumField) {
+    int max_chars = (isNumField) ? MAX_INPUT_NUM_CHARS : MAX_INPUT_CHARS;
+
+    DrawText(labelText, fieldRect.x - labelSize - 10, fieldRect.y + 5, LABEL_FONT_SIZE, BLACK);
+    DrawRectangleRec(fieldRect, fieldColor);
+    DrawRectangleLinesEx(fieldRect, 2.0, BLACK);
+
+    DrawText(typedText, (int)fieldRect.x + 5, (int)fieldRect.y + 8, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
+
+    // Draw blinking line
+    if (hovered)
+    {
+        if (typedTextLetterCount < max_chars)
+        {
+            if (((framesCounter/20)%2) == 0) DrawText("_", (int)fieldRect.x + 8 + MeasureText(typedText, intxt_FONT_SIZE), (int)fieldRect.y + 12, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
+        }
+        // TODO: I should probably take this out into a function
+        else DrawText("Reached Character Limit", DEBUG_TEXT_LOCATION.x, DEBUG_TEXT_LOCATION.y, DEBUG_TEXT_SIZE, DEBUG_TEXT_COLOR);
+    }
+
 }
