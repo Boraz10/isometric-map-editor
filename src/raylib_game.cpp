@@ -61,14 +61,14 @@ typedef enum AppScreen
     LOAD_MENU = 2,
     SAVE_MENU = 3,
     EDITOR = 4
-    
+
 } AppScreen;
 
 typedef struct Vector2i
 {
     int x;
     int y;
-    
+
     Vector2i &operator+=(const Vector2i &other)
     {
         x += other.x;
@@ -93,8 +93,7 @@ static const int screenHeight = 450;
 Vector2i worldSize = {30, 30};
 Vector2i origin = {5, 1};
 
-Color backgroundColor = RAYWHITE; //background color for the map
-
+Color backgroundColor = RAYWHITE; // background color for the map
 
 int *pWorld = nullptr;         // 2D world array
 bool *pCollisionMap = nullptr; // 2D collsion map array
@@ -116,6 +115,7 @@ const Color btn_HOVER_COLOR = GRAY;
 const Color btn_DOWN_COLOR = DARKGRAY;
 
 const int btn_FONT_SIZE = 20;
+const int btn_FONT_SIZE_SMALL = 3;
 
 // Text field color definitions
 const Color intxt_MAIN_COLOR = GRAY;
@@ -145,7 +145,7 @@ void displayScreenTitle(const char *text);                                      
 void drawButton(Rectangle &buttonRect, Color buttonColor, const char *buttonText, int textSize); // draw a button based on a rectangle, a color and some text
 Color updateButtonColor(bool hoverBool);                                                         // update a buttons color depending on if its hovered or clicked
 
-Color updateFieldColor(bool hoverBool);                                                                                                                                                                       // update a fields color depending on if its hovered
+Color updateFieldColor(bool hoverBool);                                                                                                                                                                 // update a fields color depending on if its hovered
 void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int &typedTextLetterCount, bool hovered, int framesCounter, int fieldType = 0); // draw a text field
 
 void drawErrorText(const char *text);   // Draws errror text in a specific location
@@ -257,6 +257,9 @@ int main(void)
     bool create_isTileFileSelectorHovered = false;
     bool create_isColorSelectHovered = false;
 
+    bool create_isDefaultTileUpHovered = false;
+    bool create_isDefaultTileDownHovered = false;
+
     bool create_isCreateButtonHovered = false;
 
     Rectangle create_nameField = {(screenWidth / 2) - (350 / 2), 90, 350, 40};
@@ -292,9 +295,21 @@ int main(void)
     int create_colorSelectionLetterCount = 0;
     Color create_colorSelectFieldColor = intxt_MAIN_COLOR;
 
-    Rectangle create_defaultTileField;
+    Rectangle create_defaultTileField = {(screenWidth / 2) - 100, 320, 150, 40};
+    std::string create_defaultTileText = "";
+    int create_defaultTileFieldTextSize = 0;
+    int create_defaultTileLetterCount = 0;
+    Color create_defaultTileFieldColor = intxt_MAIN_COLOR;
 
-    Rectangle create_backgroundColorField;
+    Rectangle create_defaultTileUp = {(screenWidth / 2) - 200, 320, 50, 15};
+    std::string create_defaultTileUpText = "/\\";
+    int create_defaultTileUpTextSize = MeasureText(create_defaultTileUpText.c_str(), btn_FONT_SIZE_SMALL);
+    Color create_defaultTileUpTextColor = btn_MAIN_COLOR;
+
+    Rectangle create_defaultTileDown = {(screenWidth / 2) - 200, 340, 50, 15};
+    std::string create_defaultTileDownText = "\\/";
+    int create_defaultTileDownTextSize = MeasureText(create_defaultTileDownText.c_str(), btn_FONT_SIZE_SMALL);
+    Color create_defaultTileDownTextColor = btn_MAIN_COLOR;
 
     Rectangle create_createButton = {(screenWidth / 2) - 150, screenHeight - 50, 300, 40};
     const char *create_createButtonText = "Create New Map";
@@ -342,12 +357,18 @@ int main(void)
             create_isTileFileSelectorHovered = CheckCollisionPointRec(mousePos, create_tilesetField);
             create_isColorSelectHovered = CheckCollisionPointRec(mousePos, create_colorSelectField);
 
+            create_isDefaultTileUpHovered = CheckCollisionPointRec(mousePos, create_defaultTileUp);
+            create_isDefaultTileDownHovered = CheckCollisionPointRec(mousePos, create_defaultTileDown);
+
             create_createButtonColor = updateButtonColor(create_isCreateButtonHovered);
             create_nameFieldColor = updateFieldColor(create_isNameFieldHovered);
             create_heightFieldColor = updateFieldColor(create_isHeightFieldHovered);
             create_widthFieldColor = updateFieldColor(create_isWidthFieldHovered);
             create_tilesetFieldColor = updateButtonColor(create_isTileFileSelectorHovered);
             create_colorSelectFieldColor = updateFieldColor(create_isColorSelectHovered);
+
+            create_defaultTileUpTextColor = updateFieldColor(create_isDefaultTileUpHovered);
+            create_defaultTileDownTextColor = updateFieldColor(create_isDefaultTileDownHovered);
 
             // TODO: There may be a way to take some of this out into a function.
             if (create_isNameFieldHovered)
@@ -428,7 +449,7 @@ int main(void)
                 }
             }
 
-             else if (create_isColorSelectHovered)
+            else if (create_isColorSelectHovered)
             {
 
                 SetMouseCursor(MOUSE_CURSOR_IBEAM);
@@ -459,7 +480,8 @@ int main(void)
             {
                 // create button is clicked
                 // If tileset was not selected, or its invalid, load the basic tileset
-                if (!tilesetValid) {
+                if (!tilesetValid)
+                {
                     if (!loadTileset(basicTilesetPath, true))
                     {
                         CloseWindow();
@@ -487,7 +509,8 @@ int main(void)
                 const char *pathTileset = tinyfd_openFileDialog("Select a tileset file", "", 1, tilesetPattern, ".tileset file", 0);
 
                 // verify file
-                if (pathTileset != NULL) {
+                if (pathTileset != NULL)
+                {
                     tilesetValid = loadTileset(pathTileset);
                     create_tilesetFieldText = std::filesystem::path(pathTileset).filename().string();
                     create_tilesetFieldTextSize = MeasureText(create_tilesetFieldText.c_str(), btn_FONT_SIZE);
@@ -506,7 +529,23 @@ int main(void)
                 }
             }
 
+            // Choosing the default tile
+            if (tilesetValid)
+            {
 
+                // If valid tileset, look in the TileData vector
+                create_defaultTileText = tileData.at(defaultTile).name;
+                create_defaultTileFieldTextSize = MeasureText(create_defaultTileText.c_str(), btn_FONT_SIZE); // I don't like how this is happening each frame
+
+                if (create_isDefaultTileUpHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+                {
+                    defaultTile = (defaultTile + 1) % totalTiles;
+                }
+                if (create_isDefaultTileDownHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+                {
+                    defaultTile = (defaultTile - 1 + totalTiles) % totalTiles;
+                }
+            }
         }
         break;
         case LOAD_MENU:
@@ -651,6 +690,14 @@ int main(void)
                 // Color select field
                 drawTextField(create_colorSelectField, create_colorSelectFieldColor, create_colorSelectFieldLabel, create_colorSelectFieldLabelSize,
                               create_colorSelection, create_colorSelectionLetterCount, create_isColorSelectHovered, framesCounter, 2);
+
+                // Up and down buttons
+                drawButton(create_defaultTileUp, create_defaultTileUpTextColor, create_defaultTileUpText.c_str(), create_defaultTileUpTextSize);
+                drawButton(create_defaultTileDown, create_defaultTileDownTextColor, create_defaultTileDownText.c_str(), create_defaultTileDownTextSize);
+
+                // Default tile rectangle
+                DrawRectangleLinesEx(create_defaultTileField, 2, BLACK);
+                drawButton(create_defaultTileField, WHITE, create_defaultTileText.c_str(), create_defaultTileFieldTextSize);
 
                 // Create button
                 drawButton(create_createButton, create_createButtonColor, create_createButtonText, create_createButtonTextSize);
@@ -850,7 +897,7 @@ void drawButton(Rectangle &buttonRect, Color buttonColor, const char *buttonText
     // width and height are consistent
     DrawRectangleRec(buttonRect, buttonColor);
     DrawRectangleLinesEx(buttonRect, 2, BLACK);
-    DrawText(buttonText, (buttonRect.x + (buttonRect.width - textSize) / 2), buttonRect.y + 10, 20, BLACK);
+    DrawText(buttonText, (buttonRect.x + (buttonRect.width - textSize) / 2), buttonRect.y + 10, btn_FONT_SIZE, BLACK);
 }
 
 Color updateButtonColor(bool hoverBool)
@@ -873,9 +920,8 @@ Color updateFieldColor(bool hoverBool)
 void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int &typedTextLetterCount, bool hovered, int framesCounter, int fieldType)
 {
     // field type: 0 = Normal text, 1 = number input, 2 = hex input
-    int max_chars = (fieldType == 0) ? MAX_INPUT_CHARS : 
-                    (fieldType == 1) ? MAX_INPUT_NUM_CHARS :
-                    MAX_INPUT_HEX_CHARS;
+    int max_chars = (fieldType == 0) ? MAX_INPUT_CHARS : (fieldType == 1) ? MAX_INPUT_NUM_CHARS
+                                                                          : MAX_INPUT_HEX_CHARS;
 
     DrawText(labelText, fieldRect.x - labelSize - 10, fieldRect.y + 5, LABEL_FONT_SIZE, BLACK);
     DrawRectangleRec(fieldRect, fieldColor);
@@ -896,6 +942,7 @@ void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText
     }
 }
 
+// TODO: I want one buffer for both of these, so text doesn't accidentally overlap
 void drawErrorText(const char *text)
 {
     DrawText(text, ERROR_TEXT_LOCATION.x, ERROR_TEXT_LOCATION.y, ERROR_TEXT_SIZE, ERROR_TEXT_COLOR);
@@ -906,7 +953,8 @@ void drawSuccessText(const char *text)
     DrawText(text, SUCCESS_TEXT_LOCATION.x, SUCCESS_TEXT_LOCATION.y, SUCCESS_TEXT_SIZE, SUCCESS_TEXT_COLOR);
 }
 
-void initialiseNewWorld(Vector2i worldSize, int defaultTile) {
-    pWorld = new int[worldSize.x * worldSize.y]{ defaultTile };
+void initialiseNewWorld(Vector2i worldSize, int defaultTile)
+{
+    pWorld = new int[worldSize.x * worldSize.y]{defaultTile};
     pCollisionMap = new bool[worldSize.x * worldSize.y]{false};
 }
