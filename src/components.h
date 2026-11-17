@@ -58,6 +58,7 @@ class TextField {
         TextField(Rectangle rectangle, std::string labelText, int fieldType=0);
         void draw(int &frames);
         void checkHovered(Vector2& mousePos);
+        std::string getText();
         bool hovered = false;
 
     private:

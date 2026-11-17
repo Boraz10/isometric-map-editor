@@ -138,14 +138,18 @@ bool TextField::checkCharacterRange(int key) {
 
     if (this->textLength == MAX_INPUT_HEX_CHARS) {
         // Hex: keys in range [48..57] (0 - 9) and [65..70] (A - F)
-        if (((key >= 48) && (key <= 57)) || ((key >= 65) && (key <= 70))) {
+        if (((key >= 48) && (key <= 57)) || ((key >= 65) && (key <= 70)) || ((key >= 97) && (key <= 102))) {
             return true;
         }
         return false;
     }
-
-
+    return false;
 }
+
+std::string TextField::getText() {
+    return this->text;
+}
+
 
 
 TextBox::TextBox(Rectangle rectangle, std::string text, int fontSize, Color background, Color border) {

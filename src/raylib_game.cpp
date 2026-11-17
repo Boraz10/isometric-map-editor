@@ -22,7 +22,7 @@
 #include <filesystem>
 
 #if defined(PLATFORM_WEB)
-    #include <emscripten/emscripten.h> // Emscripten library
+#include <emscripten/emscripten.h> // Emscripten library
 #endif
 
 #include <stdio.h>  // Required for: printf()
@@ -91,6 +91,8 @@ static const int screenHeight = 450;
 // World and map data
 Vector2i worldSize = {30, 30};
 Vector2i origin = {5, 1};
+std::string worldName = "";
+bool worldNameValid = false;
 
 Color backgroundColor = RAYWHITE; // background color for the map
 
@@ -108,13 +110,12 @@ int defaultTile = 0;
 // Position of the mouse, initialised to 0, 0 and updated every frame
 Vector2 mousePos = {0, 0};
 
-
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
 //----------------------------------------------------------------------------------
-Vector2i toScreen(int x, int y);                                                                 // transform tile coordinate to screen coordinate, so we know where to draw it
-bool loadTileset(std::string fileName, bool localPath = false);                                  // load a tileset from a tileset metadata file.
-void displayScreenTitle(const char *text);                                                       // Display a title at the centre top of the screen
+Vector2i toScreen(int x, int y);                                // transform tile coordinate to screen coordinate, so we know where to draw it
+bool loadTileset(std::string fileName, bool localPath = false); // load a tileset from a tileset metadata file.
+void displayScreenTitle(const char *text);                      // Display a title at the centre top of the screen
 
 void initialiseNewWorld(Vector2i worldSize, int default_tile); // initilaise a new, empty world with a default tile.
 
@@ -166,9 +167,6 @@ int main(void)
     // Source rect for the program tiles (cursor, collision, cheat tile). tileSize is only
     // known once a tileset has been loaded, so this gets set when entering the editor.
     Rectangle rectDimensions = {0, 0, 0, 0};
-
-    // Initialise world
-    initialiseNewWorld(worldSize, defaultTile);
 
     // Initialise selected tile
     Vector2i selected = {0, 0};
@@ -242,6 +240,16 @@ int main(void)
             {
                 // create button is clicked
                 currentScreen = CREATE_MENU;
+
+                // load basic tileset by default
+                if (!loadTileset(basicTilesetPath, true))
+                {
+                    CloseWindow();
+                    return 1;
+                }
+
+                defaultTile = 0;
+                create_defaultTileBox.updateText(tileData.at(defaultTile).name);
             }
 
             if (main_loadButton.clicked())
@@ -275,23 +283,71 @@ int main(void)
             // create button is clicked
             if (create_createButton.clicked())
             {
-                // If tileset was not selected, or its invalid, load the basic tileset
-                if (!tilesetValid)
+                // Check if world name is empty. If so, we can't create a world
+                if (create_nameField.getText().length() <= 0)
                 {
-                    if (!loadTileset(basicTilesetPath, true))
-                    {
-                        CloseWindow();
-                        return 1;
-                    }
+                    worldNameValid = false;
+                    drawErrorText("Must provide a valid world name");
                 }
-                
-                // if size is invalid, set it to default: 20 x 20
-                // TODO: Do the rest of map initilisation here.
+                else
+                {
+                    worldNameValid = true;
+                    worldName = create_nameField.getText();
+                    drawErrorText("");
 
-                // tileSize is valid now that a tileset is loaded
-                rectDimensions = {0, 0, (float)tileSize.x, (float)tileSize.y};
+                    // Try to inintialise width and height. If either is invalid, the default value (30) will be used
+                    try
+                    {
+                        int newX = std::stoi(create_widthField.getText());
+                        if (newX <= 0)
+                            newX = 1;
+                        worldSize.x = newX;
+                    }
+                    catch (const std::invalid_argument &e)
+                    {
+                        std::cout << "invalid width. Using default (30)" << std::endl;
+                    }
 
-                currentScreen = EDITOR;
+                    try
+                    {
+                        int newY = std::stoi(create_heightField.getText());
+                        if (newY <= 0)
+                            newY = 1;
+                        worldSize.y = newY;
+                    }
+                    catch (const std::invalid_argument &e)
+                    {
+                        std::cout << "invalid height. Using default (30)" << std::endl;
+                    }
+
+                    // Set the background color
+
+                    // I need to parse the string typed in as R G and B
+                    // Step one, set the length of the string to 6 if its below by adding trailing Fs
+                    std::string hex_string = create_colorSelectField.getText();
+                    if (hex_string.length() < 6)
+                    {
+                        hex_string.append(6 - hex_string.length(), 'F');
+                    }
+
+                    // step 2, read every 2 characters, and somehow convert them to an integer from base 16
+                    // I could potentially use a for loop here but eh
+                    unsigned char backgroundR = std::stoi(hex_string.substr(0, 2), nullptr, 16);
+                    unsigned char backgroundG = std::stoi(hex_string.substr(2, 2), nullptr, 16);
+                    unsigned char backgroundB = std::stoi(hex_string.substr(4, 2), nullptr, 16);
+                    // Then, construct a color, with the alpha being 255 if nescessary
+                    Color newBackgroundColor = {backgroundR, backgroundG, backgroundB, 255};
+                    // Finally, assign this color to the background color variable
+                    backgroundColor = newBackgroundColor;
+
+                    // tileSize is valid now that a tileset is loaded
+                    rectDimensions = {0, 0, (float)tileSize.x, (float)tileSize.y};
+
+                    // Initialise world
+                    initialiseNewWorld(worldSize, defaultTile);
+
+                    currentScreen = EDITOR;
+                }
             }
 
             if (create_tilesetField.clicked())
@@ -305,14 +361,19 @@ int main(void)
                 if (pathTileset != NULL)
                 {
                     tilesetValid = loadTileset(pathTileset);
-                    std::string fileName = std::filesystem::path(pathTileset).filename().string();
-                    create_tilesetField.updateButtonText(fileName);
+                    if (!tilesetValid)
+                        loadTileset(basicTilesetPath, true);
+
+                    defaultTile = 0;
+                    create_defaultTileBox.updateText(tileData.at(defaultTile).name);
                 }
             }
             if (tilesetAttemptedOpen)
             {
                 if (tilesetValid)
                 {
+                    // reset the default tile
+                    defaultTile = 0;
                     drawSuccessText("Tileset loaded successfully");
                 }
 
@@ -323,19 +384,20 @@ int main(void)
             }
 
             // Choosing the default tile
-            if (tilesetValid)
+            if (totalTiles > 0)
             {
 
                 // If valid tileset, look in the TileData vector
-                create_defaultTileBox.updateText(tileData.at(defaultTile).name); // I don't like how this is happening each frame
-
+                
                 if (create_defaultTileUp.clicked())
                 {
                     defaultTile = (defaultTile + 1) % totalTiles;
+                    create_defaultTileBox.updateText(tileData.at(defaultTile).name);
                 }
                 if (create_defaultTileDown.clicked())
                 {
                     defaultTile = (defaultTile - 1 + totalTiles) % totalTiles;
+                    create_defaultTileBox.updateText(tileData.at(defaultTile).name);
                 }
             }
         }
@@ -449,13 +511,13 @@ int main(void)
 
         // ------Draw------
         BeginDrawing();
-        {                              // Drawing
-            ClearBackground(RAYWHITE); // Render background
+        { // Drawing
 
             switch (currentScreen)
             {
             case MAIN_MENU:
             {
+                ClearBackground(RAYWHITE); // Render background
                 // Screen Title Text
                 displayScreenTitle("Isometric Map Editor");
 
@@ -468,10 +530,11 @@ int main(void)
             break;
             case CREATE_MENU:
             {
+                ClearBackground(RAYWHITE); // Render background
                 // Screen Title Text
                 displayScreenTitle("Create New Map");
 
-                // Name field       
+                // Name field
                 create_nameField.draw(framesCounter);
 
                 // Height field
@@ -497,25 +560,27 @@ int main(void)
                 create_defaultTileUp.draw();
                 create_defaultTileDown.draw();
 
-
                 // Create button
                 create_createButton.draw();
             }
             break;
             case LOAD_MENU:
             {
+                ClearBackground(RAYWHITE); // Render background
                 // Screen Title Text
                 displayScreenTitle("Load Existing Map");
             }
             break;
             case SAVE_MENU:
             {
+                ClearBackground(RAYWHITE); // Render background
                 // Screen Title Text
                 displayScreenTitle("Save map");
             }
             break;
             case EDITOR:
             {
+                ClearBackground(backgroundColor); // Render background
                 BeginMode2D(camera);
                 {
                     // Iteterate through every cell, from top top bottom, since bottom is closer and should be rendered later.
@@ -694,6 +759,18 @@ void displayScreenTitle(const char *text)
 
 void initialiseNewWorld(Vector2i worldSize, int defaultTile)
 {
-    pWorld = new int[worldSize.x * worldSize.y]{defaultTile};
+    delete[] pWorld;
+    delete[] pCollisionMap;
+
+    pWorld = new int[worldSize.x * worldSize.y]{0};
+    for (int i = 0; i < worldSize.x * worldSize.y; i++)
+    {
+        pWorld[i] = defaultTile;
+    }
+
     pCollisionMap = new bool[worldSize.x * worldSize.y]{false};
+    for (int i = 0; i < worldSize.x * worldSize.y; i++)
+    {
+        pCollisionMap[i] = false;
+    }
 }
