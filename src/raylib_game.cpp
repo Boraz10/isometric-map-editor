@@ -12,6 +12,9 @@
 
 #include "raylib.h"
 
+#include "components.h"
+#include "utils.h"
+
 #include "tinyfiledialogs.h"
 
 #include <iostream>
@@ -19,7 +22,7 @@
 #include <filesystem>
 
 #if defined(PLATFORM_WEB)
-#include <emscripten/emscripten.h> // Emscripten library
+    #include <emscripten/emscripten.h> // Emscripten library
 #endif
 
 #include <stdio.h>  // Required for: printf()
@@ -31,10 +34,6 @@
 #include <sstream>
 #include <algorithm>
 #include <cmath>
-
-#define MAX_INPUT_CHARS 27
-#define MAX_INPUT_NUM_CHARS 3 // (999x999)
-#define MAX_INPUT_HEX_CHARS 6 // FFFFFF
 
 //----------------------------------------------------------------------------------
 // Defines and Macros
@@ -109,32 +108,6 @@ int defaultTile = 0;
 // Position of the mouse, initialised to 0, 0 and updated every frame
 Vector2 mousePos = {0, 0};
 
-// Button color definitions
-const Color btn_MAIN_COLOR = LIGHTGRAY;
-const Color btn_HOVER_COLOR = GRAY;
-const Color btn_DOWN_COLOR = DARKGRAY;
-
-const int btn_FONT_SIZE = 20;
-const int btn_FONT_SIZE_SMALL = 3;
-
-// Text field color definitions
-const Color intxt_MAIN_COLOR = GRAY;
-const Color intxt_HOVER_COLOR = DARKGRAY;
-
-const Color TYPING_TEXT_COLOR = BLACK;
-
-const int intxt_FONT_SIZE = 22;
-
-const int LABEL_FONT_SIZE = 22;
-
-// debug text
-const Vector2 ERROR_TEXT_LOCATION = {230, 300};
-const int ERROR_TEXT_SIZE = 20;
-const Color ERROR_TEXT_COLOR = MAROON;
-
-const Vector2 SUCCESS_TEXT_LOCATION = {230, 300};
-const int SUCCESS_TEXT_SIZE = 20;
-const Color SUCCESS_TEXT_COLOR = GREEN;
 
 //----------------------------------------------------------------------------------
 // Module Functions Declaration
@@ -142,14 +115,6 @@ const Color SUCCESS_TEXT_COLOR = GREEN;
 Vector2i toScreen(int x, int y);                                                                 // transform tile coordinate to screen coordinate, so we know where to draw it
 bool loadTileset(std::string fileName, bool localPath = false);                                  // load a tileset from a tileset metadata file.
 void displayScreenTitle(const char *text);                                                       // Display a title at the centre top of the screen
-void drawButton(Rectangle &buttonRect, Color buttonColor, const char *buttonText, int textSize); // draw a button based on a rectangle, a color and some text
-Color updateButtonColor(bool hoverBool);                                                         // update a buttons color depending on if its hovered or clicked
-
-Color updateFieldColor(bool hoverBool);                                                                                                                                                                 // update a fields color depending on if its hovered
-void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int &typedTextLetterCount, bool hovered, int framesCounter, int fieldType = 0); // draw a text field
-
-void drawErrorText(const char *text);   // Draws errror text in a specific location
-void drawSuccessText(const char *text); // Draws success text in a specific location
 
 void initialiseNewWorld(Vector2i worldSize, int default_tile); // initilaise a new, empty world with a default tile.
 
@@ -198,12 +163,14 @@ int main(void)
     bool tilesetValid = false;
     bool tilesetAttemptedOpen = false;
 
-    const Rectangle rectDimensions = {0, 0, tileSize.x, tileSize.y};
+    // Source rect for the program tiles (cursor, collision, cheat tile). tileSize is only
+    // known once a tileset has been loaded, so this gets set when entering the editor.
+    Rectangle rectDimensions = {0, 0, 0, 0};
 
     // Initialise world
     initialiseNewWorld(worldSize, defaultTile);
 
-    // Initialise mouse info
+    // Initialise selected tile
     Vector2i selected = {0, 0};
 
     // Initialise camera info
@@ -232,116 +199,52 @@ int main(void)
         boxPositionX + (box_size - 64) / 2.0f,
         boxPositionY + box_size - box_size / 3.0f - 32};
 
-    // Info for all the buttons and fields (TODO: I am preloading this, I think there is a much better and cleaner way to do this)
-    Color main_newButtonColor = btn_MAIN_COLOR;
-    Color main_loadButtonColor = btn_MAIN_COLOR;
+    // Components for menu's
 
     // main menu
-
-    bool main_isNewHovered = false;
-    bool main_isLoadHovered = false;
-
-    Rectangle main_newButton = {(screenWidth / 4) - 150, (screenHeight / 2), 300, 40};
-    Rectangle main_loadButton = {(screenWidth / 4) + 250, (screenHeight / 2), 300, 40};
-
-    const char *main_newButtonText = "Create New";
-    const char *main_loadButtonText = "Load Map";
-
-    int main_newButtonTextSize = MeasureText(main_newButtonText, btn_FONT_SIZE);
-    int main_loadButtonTextSize = MeasureText(main_loadButtonText, btn_FONT_SIZE);
+    Button main_newButton(Rectangle{(screenWidth / 4) - 150, (screenHeight / 2), 300, 40}, std::string("Create New"));
+    Button main_loadButton(Rectangle{(screenWidth / 4) + 250, (screenHeight / 2), 300, 40}, std::string("Load Map"));
 
     // Create menu
-    bool create_isNameFieldHovered = false;
-    bool create_isWidthFieldHovered = false;
-    bool create_isHeightFieldHovered = false;
-    bool create_isTileFileSelectorHovered = false;
-    bool create_isColorSelectHovered = false;
+    TextField create_nameField(Rectangle{(screenWidth / 2) - (350 / 2), 70, 350, 40}, std::string("Map Name: "), 0);
+    TextField create_widthField(Rectangle{(screenWidth / 2) + 80, 130, 60, 40}, std::string("Width:"), 1);
+    TextField create_heightField(Rectangle{(screenWidth / 2) - 150, 130, 60, 40}, std::string("Height:"), 1);
+    Button create_tilesetField(Rectangle{(screenWidth / 2) - 200, 190, 400, 40}, std::string("Click here to add tileset to use"));
+    TextField create_colorSelectField(Rectangle{(screenWidth / 2) + 50, 250, 150, 40}, std::string("Background Color (HEX RGB):"), 2);
 
-    bool create_isDefaultTileUpHovered = false;
-    bool create_isDefaultTileDownHovered = false;
+    TextBox create_defaultTileBox({(screenWidth / 2) - 80, 300, 280, 40}, "", 20, WHITE, BLACK);
+    Button create_defaultTileUp(Rectangle{(screenWidth / 2) - 140, 300, 50, 15}, std::string("/\\"), 1);
+    Button create_defaultTileDown(Rectangle{(screenWidth / 2) - 140, 325, 50, 15}, std::string("\\/"), 1);
 
-    bool create_isCreateButtonHovered = false;
-
-    Rectangle create_nameField = {(screenWidth / 2) - (350 / 2), 90, 350, 40};
-    char *create_nameFieldLabel = "Map Name:";
-    int create_nameFieldLabelSize = MeasureText(create_nameFieldLabel, LABEL_FONT_SIZE);
-    char create_name[MAX_INPUT_CHARS + 1] = "\0";
-    int create_nameLetterCount = 0;
-    Color create_nameFieldColor = intxt_MAIN_COLOR;
-
-    Rectangle create_widthField = {(screenWidth / 2) + 80, 150, 60, 40};
-    char *create_widthFieldLabel = "Width:";
-    int create_widthFieldLabelSize = MeasureText(create_widthFieldLabel, LABEL_FONT_SIZE);
-    char create_width[MAX_INPUT_NUM_CHARS + 1] = "\0";
-    int create_widthLetterCount = 0;
-    Color create_widthFieldColor = intxt_MAIN_COLOR;
-
-    Rectangle create_heightField = {(screenWidth / 2) - 150, 150, 60, 40};
-    char *create_heightFieldLabel = "Height:";
-    int create_heightFieldLabelSize = MeasureText(create_heightFieldLabel, LABEL_FONT_SIZE);
-    char create_height[MAX_INPUT_NUM_CHARS + 1] = "\0";
-    int create_heightLetterCount = 0;
-    Color create_heightFieldColor = intxt_MAIN_COLOR;
-
-    Rectangle create_tilesetField{(screenWidth / 2) - 200, 210, 400, 40};
-    std::string create_tilesetFieldText = "Click here to add tileset to use";
-    int create_tilesetFieldTextSize = MeasureText(create_tilesetFieldText.c_str(), btn_FONT_SIZE);
-    Color create_tilesetFieldColor = btn_MAIN_COLOR;
-
-    Rectangle create_colorSelectField = {(screenWidth / 2) + 50, 270, 150, 40};
-    char *create_colorSelectFieldLabel = "Background Color (HEX RGB):";
-    int create_colorSelectFieldLabelSize = MeasureText(create_colorSelectFieldLabel, LABEL_FONT_SIZE);
-    char create_colorSelection[MAX_INPUT_HEX_CHARS + 1] = "\0";
-    int create_colorSelectionLetterCount = 0;
-    Color create_colorSelectFieldColor = intxt_MAIN_COLOR;
-
-    Rectangle create_defaultTileField = {(screenWidth / 2) - 100, 320, 150, 40};
-    std::string create_defaultTileText = "";
-    int create_defaultTileFieldTextSize = 0;
-    int create_defaultTileLetterCount = 0;
-    Color create_defaultTileFieldColor = intxt_MAIN_COLOR;
-
-    Rectangle create_defaultTileUp = {(screenWidth / 2) - 200, 320, 50, 15};
-    std::string create_defaultTileUpText = "/\\";
-    int create_defaultTileUpTextSize = MeasureText(create_defaultTileUpText.c_str(), btn_FONT_SIZE_SMALL);
-    Color create_defaultTileUpTextColor = btn_MAIN_COLOR;
-
-    Rectangle create_defaultTileDown = {(screenWidth / 2) - 200, 340, 50, 15};
-    std::string create_defaultTileDownText = "\\/";
-    int create_defaultTileDownTextSize = MeasureText(create_defaultTileDownText.c_str(), btn_FONT_SIZE_SMALL);
-    Color create_defaultTileDownTextColor = btn_MAIN_COLOR;
-
-    Rectangle create_createButton = {(screenWidth / 2) - 150, screenHeight - 50, 300, 40};
-    const char *create_createButtonText = "Create New Map";
-    int create_createButtonTextSize = MeasureText(create_createButtonText, btn_FONT_SIZE);
-    Color create_createButtonColor = btn_MAIN_COLOR;
+    Button create_createButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, std::string("Create New Map"));
 
     //---------------------------------------------------------
     // Main Loop
     // --------------------------------------------------------
+    int currentCursor = MOUSE_CURSOR_DEFAULT;
     while (!WindowShouldClose())
     {
         // -----Update-----
         // Get mouse position
         mousePos = GetMousePosition();
 
+        // Each screen can change this; it's applied once after the update switch
+        int desiredCursor = MOUSE_CURSOR_DEFAULT;
+
         switch (currentScreen)
         {
         case MAIN_MENU:
         {
-            main_isNewHovered = CheckCollisionPointRec(mousePos, main_newButton);
-            main_isLoadHovered = CheckCollisionPointRec(mousePos, main_loadButton);
+            main_newButton.checkHovered(mousePos);
+            main_loadButton.checkHovered(mousePos);
 
-            main_newButtonColor = updateButtonColor(main_isNewHovered);
-            main_loadButtonColor = updateButtonColor(main_isLoadHovered);
-
-            if (main_isNewHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            if (main_newButton.clicked())
             {
                 // create button is clicked
                 currentScreen = CREATE_MENU;
             }
 
-            if (main_isLoadHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            if (main_loadButton.clicked())
             {
                 // load button is clicked
                 currentScreen = LOAD_MENU;
@@ -350,135 +253,28 @@ int main(void)
         break;
         case CREATE_MENU:
         {
-            create_isNameFieldHovered = CheckCollisionPointRec(mousePos, create_nameField);
-            create_isWidthFieldHovered = CheckCollisionPointRec(mousePos, create_widthField);
-            create_isHeightFieldHovered = CheckCollisionPointRec(mousePos, create_heightField);
-            create_isCreateButtonHovered = CheckCollisionPointRec(mousePos, create_createButton);
-            create_isTileFileSelectorHovered = CheckCollisionPointRec(mousePos, create_tilesetField);
-            create_isColorSelectHovered = CheckCollisionPointRec(mousePos, create_colorSelectField);
+            create_nameField.checkHovered(mousePos);
+            create_widthField.checkHovered(mousePos);
+            create_heightField.checkHovered(mousePos);
+            create_colorSelectField.checkHovered(mousePos);
 
-            create_isDefaultTileUpHovered = CheckCollisionPointRec(mousePos, create_defaultTileUp);
-            create_isDefaultTileDownHovered = CheckCollisionPointRec(mousePos, create_defaultTileDown);
+            create_createButton.checkHovered(mousePos);
+            create_tilesetField.checkHovered(mousePos);
+            create_defaultTileUp.checkHovered(mousePos);
+            create_defaultTileDown.checkHovered(mousePos);
 
-            create_createButtonColor = updateButtonColor(create_isCreateButtonHovered);
-            create_nameFieldColor = updateFieldColor(create_isNameFieldHovered);
-            create_heightFieldColor = updateFieldColor(create_isHeightFieldHovered);
-            create_widthFieldColor = updateFieldColor(create_isWidthFieldHovered);
-            create_tilesetFieldColor = updateButtonColor(create_isTileFileSelectorHovered);
-            create_colorSelectFieldColor = updateFieldColor(create_isColorSelectHovered);
-
-            create_defaultTileUpTextColor = updateFieldColor(create_isDefaultTileUpHovered);
-            create_defaultTileDownTextColor = updateFieldColor(create_isDefaultTileDownHovered);
-
-            // TODO: There may be a way to take some of this out into a function.
-            if (create_isNameFieldHovered)
+            // update frame counter for cursor icon in text boxes (i might be able to take this into the textField class we shall see)
+            if (create_nameField.hovered || create_widthField.hovered || create_heightField.hovered || create_colorSelectField.hovered)
             {
-                SetMouseCursor(MOUSE_CURSOR_IBEAM);
-
-                int key = GetCharPressed();
-                while (key > 0)
-                {
-                    // NOTE: Only allow keys in range [32..125]
-                    if ((key >= 32) && (key <= 125) && (create_nameLetterCount < MAX_INPUT_CHARS))
-                    {
-                        create_name[create_nameLetterCount] = (char)key;
-                        create_name[create_nameLetterCount + 1] = '\0';
-                        create_nameLetterCount++;
-                    }
-
-                    key = GetCharPressed(); // Check next character in the queue
-                }
-
-                if (IsKeyPressed(KEY_BACKSPACE))
-                {
-                    create_nameLetterCount--;
-                    if (create_nameLetterCount < 0)
-                        create_nameLetterCount = 0;
-                    create_name[create_nameLetterCount] = '\0';
-                }
+                framesCounter++;
+                desiredCursor = MOUSE_CURSOR_IBEAM;
             }
+            else
+                framesCounter = 0;
 
-            else if (create_isWidthFieldHovered)
+            // create button is clicked
+            if (create_createButton.clicked())
             {
-                SetMouseCursor(MOUSE_CURSOR_IBEAM);
-                int key = GetCharPressed();
-                while (key > 0)
-                {
-                    // NOTE: Only allow keys in range [48..57], which is 0 - 9
-                    if ((key >= 48) && (key <= 57) && (create_widthLetterCount < MAX_INPUT_NUM_CHARS))
-                    {
-                        create_width[create_widthLetterCount] = (char)key;
-                        create_width[create_widthLetterCount + 1] = '\0';
-                        create_widthLetterCount++;
-                    }
-
-                    key = GetCharPressed(); // Check next character in the queue
-                }
-
-                if (IsKeyPressed(KEY_BACKSPACE))
-                {
-                    create_widthLetterCount--;
-                    if (create_widthLetterCount < 0)
-                        create_widthLetterCount = 0;
-                    create_width[create_widthLetterCount] = '\0';
-                }
-            }
-            else if (create_isHeightFieldHovered)
-            {
-                SetMouseCursor(MOUSE_CURSOR_IBEAM);
-                int key = GetCharPressed();
-                while (key > 0)
-                {
-                    // NOTE: Only allow keys in range [48..57], which is 0 - 9
-                    if ((key >= 48) && (key <= 57) && (create_heightLetterCount < MAX_INPUT_NUM_CHARS))
-                    {
-                        create_height[create_heightLetterCount] = (char)key;
-                        create_height[create_heightLetterCount + 1] = '\0';
-                        create_heightLetterCount++;
-                    }
-
-                    key = GetCharPressed(); // Check next character in the queue
-                }
-
-                if (IsKeyPressed(KEY_BACKSPACE))
-                {
-                    create_heightLetterCount--;
-                    if (create_heightLetterCount < 0)
-                        create_heightLetterCount = 0;
-                    create_height[create_heightLetterCount] = '\0';
-                }
-            }
-
-            else if (create_isColorSelectHovered)
-            {
-
-                SetMouseCursor(MOUSE_CURSOR_IBEAM);
-                int key = GetCharPressed();
-                while (key > 0)
-                {
-                    // NOTE: Only allow keys in range [48..57], and  which is 0 - 9, and 65 - 70 which is A - F
-                    if ((((key >= 48) && (key <= 57)) || ((key >= 65) && (key <= 70))) && (create_colorSelectionLetterCount < MAX_INPUT_HEX_CHARS))
-                    {
-                        create_colorSelection[create_colorSelectionLetterCount] = (char)key;
-                        create_colorSelection[create_colorSelectionLetterCount + 1] = '\0';
-                        create_colorSelectionLetterCount++;
-                    }
-
-                    key = GetCharPressed(); // Check next character in the queue
-                }
-
-                if (IsKeyPressed(KEY_BACKSPACE))
-                {
-                    create_colorSelectionLetterCount--;
-                    if (create_colorSelectionLetterCount < 0)
-                        create_colorSelectionLetterCount = 0;
-                    create_colorSelection[create_colorSelectionLetterCount] = '\0';
-                }
-            }
-
-            else if (create_isCreateButtonHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
-            {
-                // create button is clicked
                 // If tileset was not selected, or its invalid, load the basic tileset
                 if (!tilesetValid)
                 {
@@ -488,20 +284,17 @@ int main(void)
                         return 1;
                     }
                 }
-
+                
                 // if size is invalid, set it to default: 20 x 20
+                // TODO: Do the rest of map initilisation here.
+
+                // tileSize is valid now that a tileset is loaded
+                rectDimensions = {0, 0, (float)tileSize.x, (float)tileSize.y};
 
                 currentScreen = EDITOR;
             }
-            else
-                SetMouseCursor(MOUSE_CURSOR_DEFAULT);
 
-            if (create_isHeightFieldHovered || create_isWidthFieldHovered || create_isNameFieldHovered)
-                framesCounter++;
-            else
-                framesCounter = 0;
-
-            if (create_isTileFileSelectorHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            if (create_tilesetField.clicked())
             {
                 tilesetAttemptedOpen = true;
 
@@ -512,8 +305,8 @@ int main(void)
                 if (pathTileset != NULL)
                 {
                     tilesetValid = loadTileset(pathTileset);
-                    create_tilesetFieldText = std::filesystem::path(pathTileset).filename().string();
-                    create_tilesetFieldTextSize = MeasureText(create_tilesetFieldText.c_str(), btn_FONT_SIZE);
+                    std::string fileName = std::filesystem::path(pathTileset).filename().string();
+                    create_tilesetField.updateButtonText(fileName);
                 }
             }
             if (tilesetAttemptedOpen)
@@ -534,14 +327,13 @@ int main(void)
             {
 
                 // If valid tileset, look in the TileData vector
-                create_defaultTileText = tileData.at(defaultTile).name;
-                create_defaultTileFieldTextSize = MeasureText(create_defaultTileText.c_str(), btn_FONT_SIZE); // I don't like how this is happening each frame
+                create_defaultTileBox.updateText(tileData.at(defaultTile).name); // I don't like how this is happening each frame
 
-                if (create_isDefaultTileUpHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+                if (create_defaultTileUp.clicked())
                 {
                     defaultTile = (defaultTile + 1) % totalTiles;
                 }
-                if (create_isDefaultTileDownHovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+                if (create_defaultTileDown.clicked())
                 {
                     defaultTile = (defaultTile - 1 + totalTiles) % totalTiles;
                 }
@@ -648,6 +440,13 @@ int main(void)
         break;
         }
 
+        // Only touch the OS cursor when it actually changes
+        if (desiredCursor != currentCursor)
+        {
+            SetMouseCursor(desiredCursor);
+            currentCursor = desiredCursor;
+        }
+
         // ------Draw------
         BeginDrawing();
         {                              // Drawing
@@ -661,10 +460,10 @@ int main(void)
                 displayScreenTitle("Isometric Map Editor");
 
                 // Create button
-                drawButton(main_newButton, main_newButtonColor, main_newButtonText, main_newButtonTextSize);
+                main_newButton.draw();
 
                 // Load button
-                drawButton(main_loadButton, main_loadButtonColor, main_loadButtonText, main_loadButtonTextSize);
+                main_loadButton.draw();
             }
             break;
             case CREATE_MENU:
@@ -672,35 +471,35 @@ int main(void)
                 // Screen Title Text
                 displayScreenTitle("Create New Map");
 
-                // Name field
-                drawTextField(create_nameField, create_nameFieldColor, create_nameFieldLabel, create_nameFieldLabelSize,
-                              create_name, create_nameLetterCount, create_isNameFieldHovered, framesCounter);
+                // Name field       
+                create_nameField.draw(framesCounter);
 
                 // Height field
-                drawTextField(create_heightField, create_heightFieldColor, create_heightFieldLabel, create_heightFieldLabelSize,
-                              create_height, create_heightLetterCount, create_isHeightFieldHovered, framesCounter, 1);
+                create_heightField.draw(framesCounter);
 
                 // width field
-                drawTextField(create_widthField, create_widthFieldColor, create_widthFieldLabel, create_widthFieldLabelSize,
-                              create_width, create_widthLetterCount, create_isWidthFieldHovered, framesCounter, 1);
+                create_widthField.draw(framesCounter);
 
                 // Tileset file input
-                drawButton(create_tilesetField, create_tilesetFieldColor, create_tilesetFieldText.c_str(), create_tilesetFieldTextSize);
+                create_tilesetField.draw();
 
                 // Color select field
-                drawTextField(create_colorSelectField, create_colorSelectFieldColor, create_colorSelectFieldLabel, create_colorSelectFieldLabelSize,
-                              create_colorSelection, create_colorSelectionLetterCount, create_isColorSelectHovered, framesCounter, 2);
+                create_colorSelectField.draw(framesCounter);
 
-                // Up and down buttons
-                drawButton(create_defaultTileUp, create_defaultTileUpTextColor, create_defaultTileUpText.c_str(), create_defaultTileUpTextSize);
-                drawButton(create_defaultTileDown, create_defaultTileDownTextColor, create_defaultTileDownText.c_str(), create_defaultTileDownTextSize);
+                // Default tile text
+                DrawText("Default Tile:", (screenWidth / 2) - 288, 305, 22, BLACK);
+                // Rectangle{(screenWidth / 2) - 140, 320, 50, 15}
 
                 // Default tile rectangle
-                DrawRectangleLinesEx(create_defaultTileField, 2, BLACK);
-                drawButton(create_defaultTileField, WHITE, create_defaultTileText.c_str(), create_defaultTileFieldTextSize);
+                create_defaultTileBox.draw();
+
+                // Up and down buttons
+                create_defaultTileUp.draw();
+                create_defaultTileDown.draw();
+
 
                 // Create button
-                drawButton(create_createButton, create_createButtonColor, create_createButtonText, create_createButtonTextSize);
+                create_createButton.draw();
             }
             break;
             case LOAD_MENU:
@@ -738,7 +537,8 @@ int main(void)
                             {
                                 if (pCollisionMap[y * worldSize.x + x])
                                 {
-                                    DrawTextureRec(collisionTexture, rectDimensions, pos, WHITE);
+                                    // Draw on the tile's footprint, not the raised position used for tall sprites
+                                    DrawTextureRec(collisionTexture, rectDimensions, Vector2{(float)screenPos.x, (float)screenPos.y}, WHITE);
                                 }
                             }
                         }
@@ -887,70 +687,9 @@ void displayScreenTitle(const char *text)
 {
     int titleFontSize = 30;
     int textWidth = MeasureText(text, titleFontSize);
-    Vector2 titlePos = {(screenWidth - textWidth) / 2, 40};
+    Vector2 titlePos = {(screenWidth - textWidth) / 2, 20};
 
     DrawText(text, titlePos.x, titlePos.y, titleFontSize, BLACK);
-}
-
-void drawButton(Rectangle &buttonRect, Color buttonColor, const char *buttonText, int textSize)
-{
-    // width and height are consistent
-    DrawRectangleRec(buttonRect, buttonColor);
-    DrawRectangleLinesEx(buttonRect, 2, BLACK);
-    DrawText(buttonText, (buttonRect.x + (buttonRect.width - textSize) / 2), buttonRect.y + 10, btn_FONT_SIZE, BLACK);
-}
-
-Color updateButtonColor(bool hoverBool)
-{
-    if (hoverBool)
-    {
-        return (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) ? btn_DOWN_COLOR : btn_HOVER_COLOR;
-    }
-
-    return btn_MAIN_COLOR;
-}
-
-Color updateFieldColor(bool hoverBool)
-{
-    if (hoverBool)
-        return intxt_HOVER_COLOR;
-    return intxt_MAIN_COLOR;
-}
-
-void drawTextField(Rectangle &fieldRect, Color fieldColor, const char *labelText, int labelSize, const char *typedText, int &typedTextLetterCount, bool hovered, int framesCounter, int fieldType)
-{
-    // field type: 0 = Normal text, 1 = number input, 2 = hex input
-    int max_chars = (fieldType == 0) ? MAX_INPUT_CHARS : (fieldType == 1) ? MAX_INPUT_NUM_CHARS
-                                                                          : MAX_INPUT_HEX_CHARS;
-
-    DrawText(labelText, fieldRect.x - labelSize - 10, fieldRect.y + 5, LABEL_FONT_SIZE, BLACK);
-    DrawRectangleRec(fieldRect, fieldColor);
-    DrawRectangleLinesEx(fieldRect, 2.0, BLACK);
-
-    DrawText(typedText, (int)fieldRect.x + 5, (int)fieldRect.y + 8, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
-
-    // Draw blinking line
-    if (hovered)
-    {
-        if (typedTextLetterCount < max_chars)
-        {
-            if (((framesCounter / 20) % 2) == 0)
-                DrawText("_", (int)fieldRect.x + 8 + MeasureText(typedText, intxt_FONT_SIZE), (int)fieldRect.y + 12, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
-        }
-        else
-            drawErrorText("Reached Character Limit");
-    }
-}
-
-// TODO: I want one buffer for both of these, so text doesn't accidentally overlap
-void drawErrorText(const char *text)
-{
-    DrawText(text, ERROR_TEXT_LOCATION.x, ERROR_TEXT_LOCATION.y, ERROR_TEXT_SIZE, ERROR_TEXT_COLOR);
-}
-
-void drawSuccessText(const char *text)
-{
-    DrawText(text, SUCCESS_TEXT_LOCATION.x, SUCCESS_TEXT_LOCATION.y, SUCCESS_TEXT_SIZE, SUCCESS_TEXT_COLOR);
 }
 
 void initialiseNewWorld(Vector2i worldSize, int defaultTile)

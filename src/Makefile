@@ -34,6 +34,7 @@ PROJECT_VERSION       ?= 1.0
 PROJECT_BUILD_PATH    ?= .
 PROJECT_SOURCE_FILES  ?= \
     raylib_game.cpp \
+    components.cpp \
     tinyfiledialogs.c
 
 # raylib library variables
