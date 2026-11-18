@@ -52,6 +52,7 @@
 //----------------------------------------------------------------------------------
 
 char const *tilesetPattern[1] = {"*.tileset"};
+char const *mapPattern[1] = {"*.bormap"};
 
 typedef enum AppScreen
 {
@@ -88,6 +89,10 @@ typedef struct TileDef
 static const int screenWidth = 800;
 static const int screenHeight = 450;
 
+// file data
+std::string mapFileName = "";
+std::filesystem::path mapFilePath = "";
+
 // World and map data
 Vector2i worldSize = {30, 30};
 Vector2i origin = {5, 1};
@@ -105,6 +110,7 @@ int totalTiles;
 std::vector<TileDef> tileData; // Table for tileset. I need to do this manually it seems.
 Vector2i tileSize = {0, 0};
 const char *basicTilesetPath = "basic1.tileset"; // initialise with a pre-packed tileset
+std::string mapTilesetPath = basicTilesetPath;
 int defaultTile = 0;
 
 // Position of the mouse, initialised to 0, 0 and updated every frame
@@ -119,6 +125,9 @@ void displayScreenTitle(const char *text);                      // Display a tit
 
 void initialiseNewWorld(Vector2i worldSize, int default_tile); // initilaise a new, empty world with a default tile.
 
+bool saveMapToFile();
+bool isFilepathValid(std::filesystem::path&);
+
 //----------------------------------------------------------------------------------
 // Program main entry point
 //----------------------------------------------------------------------------------
@@ -130,6 +139,13 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "Map making program");
     AppScreen currentScreen = MAIN_MENU;
     SetTargetFPS(60);
+
+    // lambda function for changing screen, which also clears the message
+    auto changeScreen = [&currentScreen](AppScreen newScreen)
+    {
+        currentScreen = newScreen;
+        clearMessage();
+    };
 
     int framesCounter = 0;
 
@@ -162,7 +178,6 @@ int main(void)
 
     // Tileset path
     bool tilesetValid = false;
-    bool tilesetAttemptedOpen = false;
 
     // Source rect for the program tiles (cursor, collision, cheat tile). tileSize is only
     // known once a tileset has been loaded, so this gets set when entering the editor.
@@ -200,21 +215,40 @@ int main(void)
     // Components for menu's
 
     // main menu
-    Button main_newButton(Rectangle{(screenWidth / 4) - 150, (screenHeight / 2), 300, 40}, std::string("Create New"));
-    Button main_loadButton(Rectangle{(screenWidth / 4) + 250, (screenHeight / 2), 300, 40}, std::string("Load Map"));
+    Button main_newButton(Rectangle{(screenWidth / 4) - 150, (screenHeight / 2), 300, 40}, "Create New");
+    Button main_loadButton(Rectangle{(screenWidth / 4) + 250, (screenHeight / 2), 300, 40}, "Load Map");
 
     // Create menu
-    TextField create_nameField(Rectangle{(screenWidth / 2) - (350 / 2), 70, 350, 40}, std::string("Map Name: "), 0);
-    TextField create_widthField(Rectangle{(screenWidth / 2) + 80, 130, 60, 40}, std::string("Width:"), 1);
-    TextField create_heightField(Rectangle{(screenWidth / 2) - 150, 130, 60, 40}, std::string("Height:"), 1);
-    Button create_tilesetField(Rectangle{(screenWidth / 2) - 200, 190, 400, 40}, std::string("Click here to add tileset to use"));
-    TextField create_colorSelectField(Rectangle{(screenWidth / 2) + 50, 250, 150, 40}, std::string("Background Color (HEX RGB):"), 2);
+    TextField create_nameField(Rectangle{(screenWidth / 2) - (350 / 2), 70, 350, 40}, "Map Name: ", 0);
+    TextField create_widthField(Rectangle{(screenWidth / 2) + 80, 130, 60, 40}, "Width:", 1);
+    TextField create_heightField(Rectangle{(screenWidth / 2) - 150, 130, 60, 40}, "Height:", 1);
+    Button create_tilesetField(Rectangle{(screenWidth / 2) - 200, 190, 400, 40}, "Click here to add tileset to use");
+    TextField create_colorSelectField(Rectangle{(screenWidth / 2) + 50, 250, 150, 40}, "Background Color (HEX RGB):", 2);
 
+    
     TextBox create_defaultTileBox({(screenWidth / 2) - 80, 300, 280, 40}, "", 20, WHITE, BLACK);
     Button create_defaultTileUp(Rectangle{(screenWidth / 2) - 140, 300, 50, 15}, std::string("/\\"), 1);
     Button create_defaultTileDown(Rectangle{(screenWidth / 2) - 140, 325, 50, 15}, std::string("\\/"), 1);
+    
+    BackButton create_backButton(screenWidth - 60, 10);
 
-    Button create_createButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, std::string("Create New Map"));
+    Button create_createButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, "Create New Map");
+
+    // Editor screen: Save button
+    Button editor_saveButton({(screenWidth - 160), 15, 150, 40}, std::string("Save")); 
+
+    // Save screen
+    TextField save_mapName(Rectangle{(screenWidth / 2) - (350 / 2), 130, 350, 40}, "Map Name:");
+    TextBox save_locationText(Rectangle{(screenWidth / 2) - (350 / 2), 220, 350, 40}, "", 20, WHITE, BLACK);
+    Button save_location(Rectangle{(screenWidth / 2) - (350 / 2), 270, 350, 40}, "Browse...");
+
+    BackButton save_backButton(screenWidth - 60, 10);
+
+    Button save_saveButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, "Save");
+
+
+    // Load Screen
+    BackButton load_backButton(screenWidth - 60, 10);
 
     //---------------------------------------------------------
     // Main Loop
@@ -239,14 +273,15 @@ int main(void)
             if (main_newButton.clicked())
             {
                 // create button is clicked
-                currentScreen = CREATE_MENU;
+                changeScreen(CREATE_MENU);
 
-                // load basic tileset by default
+                // load basic tileset by default, and reset path
                 if (!loadTileset(basicTilesetPath, true))
                 {
                     CloseWindow();
                     return 1;
                 }
+                mapTilesetPath = basicTilesetPath;
 
                 defaultTile = 0;
                 create_defaultTileBox.updateText(tileData.at(defaultTile).name);
@@ -255,12 +290,13 @@ int main(void)
             if (main_loadButton.clicked())
             {
                 // load button is clicked
-                currentScreen = LOAD_MENU;
+                changeScreen(LOAD_MENU);
             }
         }
         break;
         case CREATE_MENU:
         {
+            create_backButton.checkHovered(mousePos);
             create_nameField.checkHovered(mousePos);
             create_widthField.checkHovered(mousePos);
             create_heightField.checkHovered(mousePos);
@@ -280,6 +316,11 @@ int main(void)
             else
                 framesCounter = 0;
 
+            // back button is clicked 
+            if (create_backButton.clicked()) {
+                changeScreen(MAIN_MENU);
+            }
+
             // create button is clicked
             if (create_createButton.clicked())
             {
@@ -287,13 +328,15 @@ int main(void)
                 if (create_nameField.getText().length() <= 0)
                 {
                     worldNameValid = false;
-                    drawErrorText("Must provide a valid world name");
+                    showErrorMessage("Please input a valid world name");
                 }
                 else
                 {
                     worldNameValid = true;
                     worldName = create_nameField.getText();
-                    drawErrorText("");
+
+                    // set fileName to world name
+                    mapFileName = create_nameField.getText();
 
                     // Try to inintialise width and height. If either is invalid, the default value (30) will be used
                     try
@@ -346,14 +389,12 @@ int main(void)
                     // Initialise world
                     initialiseNewWorld(worldSize, defaultTile);
 
-                    currentScreen = EDITOR;
+                    changeScreen(EDITOR);
                 }
             }
 
             if (create_tilesetField.clicked())
             {
-                tilesetAttemptedOpen = true;
-
                 // tile button is clicked, open a file dialogue
                 const char *pathTileset = tinyfd_openFileDialog("Select a tileset file", "", 1, tilesetPattern, ".tileset file", 0);
 
@@ -361,25 +402,21 @@ int main(void)
                 if (pathTileset != NULL)
                 {
                     tilesetValid = loadTileset(pathTileset);
-                    if (!tilesetValid)
+                    mapTilesetPath = pathTileset;
+                    if (!tilesetValid) {
+                        // Needed: a failed load can clear tileData and unload the texture
+                        // part-way through, so the basic tileset has to be reloaded.
                         loadTileset(basicTilesetPath, true);
+                        mapTilesetPath = basicTilesetPath;
+                        showErrorMessage("Could not load tileset");
+                    }
+                    else {
+                        showSuccessMessage("Tileset loaded successfully");
+                    }
 
-                    defaultTile = 0;
-                    create_defaultTileBox.updateText(tileData.at(defaultTile).name);
-                }
-            }
-            if (tilesetAttemptedOpen)
-            {
-                if (tilesetValid)
-                {
                     // reset the default tile
                     defaultTile = 0;
-                    drawSuccessText("Tileset loaded successfully");
-                }
-
-                else
-                {
-                    drawErrorText("Could not load tileset");
+                    create_defaultTileBox.updateText(tileData.at(defaultTile).name);
                 }
             }
 
@@ -404,15 +441,110 @@ int main(void)
         break;
         case LOAD_MENU:
         {
+            load_backButton.checkHovered(mousePos);
+
+            // back button is clicked 
+            if (load_backButton.clicked()) {
+                changeScreen(MAIN_MENU);
+            }
         }
         break;
         case SAVE_MENU:
         {
+            save_backButton.checkHovered(mousePos);
+            save_mapName.checkHovered(mousePos);
+            save_location.checkHovered(mousePos);
+            save_saveButton.checkHovered(mousePos);
+
+            // update frame counter for the blinking cursor in the name field
+            if (save_mapName.hovered)
+            {
+                framesCounter++;
+                desiredCursor = MOUSE_CURSOR_IBEAM;
+            }
+            else
+                framesCounter = 0;
+
+            // back button is clicked. The name field is only read when Browse or Save is
+            // clicked, so going back discards any changes made to it.
+            if (save_backButton.clicked()) {
+                changeScreen(EDITOR);
+            }
+
+            if (save_location.clicked()) {
+                // open file save location
+                std::string defaultName = save_mapName.getText() + ".bormap";
+                char const * filepath = tinyfd_saveFileDialog("Choose a save location", defaultName.c_str(), 1, mapPattern, "bormap files");
+                if (filepath != NULL) {
+                    std::filesystem::path chosenPath = filepath;
+                    bool accepted = true;
+
+                    // if it doesn't end in .bormap, add .bormap to the end
+                    if (chosenPath.extension() != ".bormap") {
+                        chosenPath += ".bormap";
+
+                        // The dialog only asked about overwriting the name that was typed,
+                        // not the one with .bormap added, so ask again here.
+                        if (std::filesystem::exists(chosenPath)) {
+                            accepted = tinyfd_messageBox("File already exists",
+                                                         "A .bormap file with that name already exists. Overwrite it?",
+                                                         "yesno", "question", 0) == 1;
+                        }
+                    }
+
+                    if (accepted) {
+                        mapFilePath = chosenPath;
+
+                        // set the text to the filepath
+                        // (This is hacky, but it will do for now. I'll fix it up later)
+                        std::string displayPath = mapFilePath.string();
+                        displayPath = (displayPath.length() >= 30) ? "..." + displayPath.substr(displayPath.length() - 30) : displayPath;
+                        save_locationText.updateText(displayPath);
+
+                        std::cout << mapFilePath << std::endl;
+                    }
+                }
+            }
+
+            if (save_saveButton.clicked()) {
+                std::string newName = save_mapName.getText();
+
+                if (newName.empty()) {
+                    showErrorMessage("Please input a valid map name");
+                }
+                else if (!isFilepathValid(mapFilePath)) {
+                    showErrorMessage(mapFilePath.empty() ? "Choose a save location" : "Can't save to that location");
+                }
+                else {
+                    mapFileName = newName;
+                    worldName = newName;
+
+                    if (saveMapToFile()) {
+                        // Return to the editor, and confirm the save there
+                        changeScreen(EDITOR);
+                        showSuccessMessage("Map saved");
+                    }
+                    else {
+                        showErrorMessage("Could not write map file");
+                    }
+                }
+            }
         }
         break;
 
         case EDITOR:
         {
+
+            // Save button
+            editor_saveButton.checkHovered(mousePos);
+
+            if (editor_saveButton.clicked()) {
+                // TODO: if the map was already loaded, it means it already has a file name, in which case we set it to that. 
+                // TODO: same with the file location 
+                save_mapName.setDefaultText(mapFileName);
+
+                changeScreen(SAVE_MENU);
+            }
 
             // left and right arrow keys switch current tile
             if (!collisionLayer)
@@ -478,7 +610,7 @@ int main(void)
             // Placing tiles with the left mouse button
 
             bool inBounds = (selected.x >= 0 && selected.x < worldSize.x && selected.y >= 0 && selected.y < worldSize.y);
-            if (inBounds)
+            if (inBounds && !editor_saveButton.hovered)
             {
                 int idx = selected.y * worldSize.x + selected.x;
                 if (collisionLayer)
@@ -560,6 +692,9 @@ int main(void)
                 create_defaultTileUp.draw();
                 create_defaultTileDown.draw();
 
+                // back button
+                create_backButton.draw();
+
                 // Create button
                 create_createButton.draw();
             }
@@ -569,6 +704,9 @@ int main(void)
                 ClearBackground(RAYWHITE); // Render background
                 // Screen Title Text
                 displayScreenTitle("Load Existing Map");
+
+                // back button
+                load_backButton.draw();
             }
             break;
             case SAVE_MENU:
@@ -576,6 +714,15 @@ int main(void)
                 ClearBackground(RAYWHITE); // Render background
                 // Screen Title Text
                 displayScreenTitle("Save map");
+
+                save_mapName.draw(framesCounter);
+
+                save_locationText.draw();
+                save_location.draw();
+
+                save_backButton.draw();
+
+                save_saveButton.draw();
             }
             break;
             case EDITOR:
@@ -647,9 +794,16 @@ int main(void)
                 DrawRectangleLines(layerRect.x, layerRect.y, layerRect.width, layerRect.height, BLACK);
                 DrawText(TextFormat("Layer: %s", ((collisionLayer) ? "Collision" : "Map")),
                          layerRect.x + 6, layerRect.y + 6, 16, BLACK);
+
+                // save button
+                editor_saveButton.draw();
+                break;
             }
-            break;
+
             }
+
+            // Status message
+            drawMessage();
         }
 
         EndDrawing();
@@ -773,4 +927,49 @@ void initialiseNewWorld(Vector2i worldSize, int defaultTile)
     {
         pCollisionMap[i] = false;
     }
+}
+
+bool saveMapToFile() {
+     std::ofstream file(mapFilePath);
+
+     if (!file.is_open()) {
+        std::cout << "Error opening file";
+        return false;
+     }
+
+     // first line is the map name
+     file << mapFileName << std::endl;
+     // second line is the path to the tileset
+     file << mapTilesetPath << std::endl;
+     // third line is the background color
+     file << std::hex << static_cast<int>(backgroundColor.r) << "|" << static_cast<int>(backgroundColor.g) << "|" << static_cast<int>(backgroundColor.b) << std::endl;
+     // fourth line is the size of the map
+     file << std::dec << worldSize.x << " " << worldSize.y << std::endl;
+     // remaining lines are the rest of the map and collision data
+     for (int y = 0; y < worldSize.y; y++) {
+        for (int x = 0; x < worldSize.x; x++) {
+            file << pWorld[y * worldSize.x + x] << " " << pCollisionMap[y * worldSize.x + x] << " ";
+        }
+        file << std::endl;
+     }
+
+     // for safety
+     file.close();
+     return !file.fail();
+}
+
+bool isFilepathValid(std::filesystem::path& path) {
+    std::error_code ec;
+
+    if (!path.has_filename()) {
+        return false;
+    }
+
+    std::filesystem::path parent = path.parent_path();
+    if (!parent.empty() && (!std::filesystem::exists(parent, ec) || !std::filesystem::is_directory(parent, ec))) {
+        return false;
+    }
+
+    std::ofstream testFile(path, std::ios::app);
+    return testFile.is_open();
 }

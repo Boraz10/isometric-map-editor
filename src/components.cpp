@@ -1,14 +1,17 @@
 #include "components.h"
 #include "utils.h"
 
+// I could definitely make an abstract class. 
+// This would also allow for polymorphism on the draw steps, which would look a little cleaner and be easier to implement. 
+
 Button::Button(Rectangle rectangle, std::string buttonText, int buttonType)
 {
     this->buttonRect = rectangle;
     this->buttonText = buttonText;
 
     this->fontSize = (buttonType == 1)
-                   ? btn_FONT_SIZE_SMALL
-                   : btn_FONT_SIZE_STANDARD;
+                         ? btn_FONT_SIZE_SMALL
+                         : btn_FONT_SIZE_STANDARD;
 
     this->textSize = MeasureText(buttonText.c_str(), fontSize);
 }
@@ -17,10 +20,12 @@ void Button::draw()
     DrawRectangleRec(buttonRect, buttonColor);
     DrawRectangleLinesEx(buttonRect, 2, BLACK);
     // TODO: again, I should really be checking on the button type, not the text size
-    if (fontSize == btn_FONT_SIZE_SMALL) {
+    if (fontSize == btn_FONT_SIZE_SMALL)
+    {
         DrawText(buttonText.c_str(), (buttonRect.x + (buttonRect.width - textSize) / 2), buttonRect.y + 3, fontSize, BLACK);
     }
-    else {
+    else
+    {
         DrawText(buttonText.c_str(), (buttonRect.x + (buttonRect.width - textSize) / 2), buttonRect.y + 10, fontSize, BLACK);
     }
 }
@@ -36,7 +41,8 @@ void Button::checkHovered(Vector2 &mousePos)
         this->buttonColor = btn_HOVER_COLOR;
         this->hovered = true;
     }
-    else {
+    else
+    {
         this->buttonColor = btn_MAIN_COLOR;
         this->hovered = false;
     }
@@ -44,7 +50,7 @@ void Button::checkHovered(Vector2 &mousePos)
 
 bool Button::clicked()
 {
-     if (hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+    if (hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT))
     {
         this->buttonColor = btn_DOWN_COLOR;
     }
@@ -56,17 +62,17 @@ bool Button::clicked()
     return false;
 }
 
-
-
-
-TextField::TextField(Rectangle rectangle, std::string labelText, int fieldType)
+TextField::TextField(Rectangle rectangle, std::string labelText, int fieldType, std::string defaultText)
 {
     this->fieldRect = rectangle;
     this->label = labelText;
     this->labelSize = MeasureText(labelText.c_str(), LABEL_FONT_SIZE);
     this->textLength =
-        (fieldType == 2) ? MAX_INPUT_HEX_CHARS : (fieldType == 1) ? MAX_INPUT_NUM_CHARS
-                                                                  : MAX_INPUT_CHARS;
+        (fieldType == 3) ? MAX_INPUT_CHARS_UNRESTRICTED : (fieldType == 2) ? MAX_INPUT_HEX_CHARS
+                                                      : (fieldType == 1)   ? MAX_INPUT_NUM_CHARS
+                                                                           : MAX_INPUT_CHARS;
+
+    this->text = defaultText;
 }
 void TextField::draw(int &frames)
 {
@@ -77,15 +83,10 @@ void TextField::draw(int &frames)
     DrawText(text.c_str(), (int)fieldRect.x + 5, (int)fieldRect.y + 8, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
 
     // Draw blinking line
-    if (hovered)
+    if (hovered && text.length() < textLength)
     {
-        if (text.length() < textLength)
-        {
-            if (((frames / 20) % 2) == 0)
-                DrawText("_", (int)fieldRect.x + 8 + MeasureText(text.c_str(), intxt_FONT_SIZE), (int)fieldRect.y + 12, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
-        }
-        else
-            drawErrorText("Reached Character Limit");
+        if (((frames / 20) % 2) == 0)
+            DrawText("_", (int)fieldRect.x + 8 + MeasureText(text.c_str(), intxt_FONT_SIZE), (int)fieldRect.y + 12, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
     }
 }
 
@@ -110,6 +111,9 @@ void TextField::checkHovered(Vector2 &mousePos)
             if (this->text.length() > 0)
                 this->text.pop_back();
         }
+
+        if (this->text.length() >= this->textLength)
+            showErrorMessage("Reached Character Limit", 0.1f);
     }
     else
     {
@@ -118,41 +122,59 @@ void TextField::checkHovered(Vector2 &mousePos)
     }
 }
 
-bool TextField::checkCharacterRange(int key) {
-    // I should really be checking based on the text type and not the length. 
-    if (this->textLength == MAX_INPUT_CHARS) {
+bool TextField::checkCharacterRange(int key)
+{
+    // I should really be checking based on the text type and not the length.
+    if (this->textLength == MAX_INPUT_CHARS)
+    {
         // Standard: keys in range [32..125]
-        if ((key >= 32) && (key <= 125)) {
+        if ((key >= 32) && (key <= 125))
+        {
             return true;
         }
         return false;
     }
 
-    if (this->textLength == MAX_INPUT_NUM_CHARS) {
+    if (this->textLength == MAX_INPUT_NUM_CHARS)
+    {
         // Number: keys in range [48..57] (0 - 9)
-        if ((key >= 48) && (key <= 57)) {
+        if ((key >= 48) && (key <= 57))
+        {
             return true;
         }
         return false;
     }
 
-    if (this->textLength == MAX_INPUT_HEX_CHARS) {
+    if (this->textLength == MAX_INPUT_HEX_CHARS)
+    {
         // Hex: keys in range [48..57] (0 - 9) and [65..70] (A - F)
-        if (((key >= 48) && (key <= 57)) || ((key >= 65) && (key <= 70)) || ((key >= 97) && (key <= 102))) {
+        if (((key >= 48) && (key <= 57)) || ((key >= 65) && (key <= 70)) || ((key >= 97) && (key <= 102)))
+        {
             return true;
         }
         return false;
+    }
+
+    if (this->textLength == MAX_INPUT_CHARS_UNRESTRICTED)
+    {
+        // Unrestricted: every printable ASCII character [32..126]
+        return (key >= 32) && (key <= 126);
     }
     return false;
 }
 
-std::string TextField::getText() {
+std::string TextField::getText()
+{
     return this->text;
 }
 
+void TextField::setDefaultText(std::string &newText)
+{
+    this->text = newText;
+}
 
-
-TextBox::TextBox(Rectangle rectangle, std::string text, int fontSize, Color background, Color border) {
+TextBox::TextBox(Rectangle rectangle, std::string text, int fontSize, Color background, Color border)
+{
     this->textBoxRect = rectangle;
     this->text = text;
     this->textSize = MeasureText(text.c_str(), fontSize);
@@ -160,13 +182,51 @@ TextBox::TextBox(Rectangle rectangle, std::string text, int fontSize, Color back
     this->backgroundColor = background;
     this->borderColor = border;
 }
-void TextBox::draw() {
+void TextBox::draw()
+{
     DrawRectangleRec(textBoxRect, backgroundColor);
     DrawRectangleLinesEx(textBoxRect, 2, borderColor);
     DrawText(text.c_str(), (textBoxRect.x + (textBoxRect.width - textSize) / 2), textBoxRect.y + 10, fontSize, BLACK);
 }
 
-void TextBox::updateText(std::string& newText) {
+void TextBox::updateText(std::string &newText)
+{
     this->text = newText;
     this->textSize = MeasureText(text.c_str(), fontSize);
+}
+
+BackButton::BackButton(int posX, int posY) {
+    this->rect = {(float)posX, (float)posY, 50, 50};
+    this->buttonColor = btn_MAIN_COLOR;
+}
+void BackButton::draw() {
+    DrawRectangleRec(rect, buttonColor);
+    DrawRectangleLinesEx(rect, 2, BLACK);
+
+    DrawText("Back", (rect.x + (rect.width - 40) / 2), rect.y + 15, 18, BLACK);
+}
+
+void BackButton::checkHovered(Vector2& mousePos) {
+    if (CheckCollisionPointRec(mousePos, rect))
+    {
+        this->buttonColor = btn_HOVER_COLOR;
+        this->hovered = true;
+    }
+    else
+    {
+        this->buttonColor = btn_MAIN_COLOR;
+        this->hovered = false;
+    }
+
+}
+
+bool BackButton::clicked() {
+    if (hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        this->buttonColor = btn_DOWN_COLOR;
+    }
+    if (hovered && IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+        return true;
+    }
+    return false;
+
 }

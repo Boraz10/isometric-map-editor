@@ -6,6 +6,7 @@
 #define MAX_INPUT_CHARS 27
 #define MAX_INPUT_NUM_CHARS 3 // (999x999)
 #define MAX_INPUT_HEX_CHARS 6 // FFFFFF
+#define MAX_INPUT_CHARS_UNRESTRICTED 999 // for filepaths
 
 // Button color definitions
 #define btn_MAIN_COLOR  LIGHTGRAY
@@ -37,6 +38,7 @@ class Button {
         void updateButtonText(std::string& text);
         void checkHovered(Vector2& mousePos);
         bool clicked();
+        bool hovered = false;
 
     private:
         Rectangle buttonRect = {-1, -1, -1, -1};
@@ -45,7 +47,6 @@ class Button {
         Color buttonColor = btn_MAIN_COLOR;
         int fontSize = -1;
 
-        bool hovered = false;
 
 };
 
@@ -53,12 +54,14 @@ class Button {
 //     0: standard (all chars, max 27 chars)
 //     1: number (0-9, max 3 chars)
 //     2: hex (0-9 and A-F, max 6 chars)
+//     3: unrestricted (all printable chars, max 999 chars, e.g. for file paths)
 class TextField {
     public:
-        TextField(Rectangle rectangle, std::string labelText, int fieldType=0);
+        TextField(Rectangle rectangle, std::string labelText="", int fieldType=0, std::string defaultText="");
         void draw(int &frames);
         void checkHovered(Vector2& mousePos);
         std::string getText();
+        void setDefaultText(std::string& newText);
         bool hovered = false;
 
     private:
@@ -86,4 +89,17 @@ class TextBox {
         int fontSize;
         Color backgroundColor;
         Color borderColor;
+};
+
+class BackButton {
+    public:
+        BackButton(int posX, int posY);
+        void draw();
+        void checkHovered(Vector2& mousePos);
+        bool clicked();
+        bool hovered = false;
+
+    private:
+        Rectangle rect = {-1, -1, -1, -1};
+        Color buttonColor = btn_MAIN_COLOR;
 };
