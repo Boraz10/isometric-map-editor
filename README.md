@@ -1,96 +1,62 @@
------------------------------------
-_DISCLAIMER:_
+# Isometric Map Creator
+### By Boraz10
 
-Welcome to the **raylib game template**!
+![Isometric Map Creator](screenshots/editor2.png "Isometric Map Creator")
 
-This template provides a base structure to start developing a small raylib game in plain C. The repo is also pre-configured with a default `LICENSE` (zlib/libpng) and a `README.md` (this one) to be properly filled by users. Feel free to change the LICENSE as required.
+## Description
 
-All the sections defined by `$(Data to Fill)` are expected to be edited and filled properly. It's recommended to delete this disclaimer message after editing this `README.md` file.
+A propriotary map creator for a game I plan on making. It works with specific '.tileset' files, and save in the .bormap file format.
+The program allows for loading custom tilesets and creating a map with it, including a layer for collision, in a simple, easy to understand editor.
+Maps can be saved and loaded at any time. 
+NOTE: File selection only works with distros that support tinyfiledialogs. It will work on Windows, MacOS, and certain Linux distros, but i couldn't get it working on Arch for example. 
 
------------------------------------
+### Load Custom Tilesets
+.tileset files are a text file which next to (in the same directory as) a png of the tileset you intend to use. In order, the file describes the name, default tile size, and the name, location and demensions of each tile on the tile map: tile_name x y width height
+For example:
 
-## Getting Started with this template
+basic1.png \
+64 32 \
+tile_blank 0 0 64 32 \
+tile_grass 64 0 64 32 \
+tile_water 128 0 64 32 \
+tile_post 0 32 64 64 \
+tile_tree 64 32 64 64 \
+tile_sand 128 64 64 32 
 
-### Windows: Visual Studio
+The basic tileset is included in the build, and is the default tileset used if no other tileset is selected. 
+There does not currently exist a streamlined workflow for constructing tilesets. They need to be constructed manually.
+NOTE: This editor is designed to mainly work with isometric tiles with a width of 64. Taller tiles may be allowed.
 
-- After extracting the zip, the parent folder `raylib-game-template` should exist in the same directory as `raylib` itself.  So, your file structure should look like this:
-    - Some parent directory
-        - `raylib`
-            - the contents of https://github.com/raysan5/raylib
-        - `raylib-game-template`
-            - this `README.md` and all other raylib-game-template files
-- If using Visual Studio, open projects/VS2022/raylib-game-template.sln
-- Select on `raylib_game` in the solution explorer, then in the toolbar at the top, click `Project` > `Set as Startup Project`
-- Now you're all set up!  Click `Local Windows Debugger` with the green play arrow and the project will run.
 
-### Linux
+### Editor controls
+The view of the editor can be moved with the mouse:
+    Pan: Click and drag right mouse
+    Zoom: Middle mouse button
+    NOTE: On trackpads, the zoom may be a little finicky, it's the same motion for scrolling. 
 
-When setting up this template on linux for the first time, install the dependencies from this page:
-([Working on GNU Linux](https://github.com/raysan5/raylib/wiki/Working-on-GNU-Linux))
+Arrow keys change the block that you currently want to place
+The up arrow key toggles between the map layer and the collision layer
 
-You can use this templates in a few ways: using Visual Studio, using CMake, or make your own build setup. This repository comes with Visual Studio and CMake already set up.
+To place a block, hover over the tile with your mouse, and left click.
 
-Chose one of the follow setup options that fit in you development environment.
+![Editor 2](screenshots/editor2.png "Have fun")
 
-### CLI: Makefile
+### Creating a Map
+Hit the 'Create' button on start up to make a new map. Then, you can input info such as the name of the map, the width and height (in tiles), the tileset you want to use, and the backhround colour for the map. You can also specify the default tile, the tile which will fill the whole world when the map is created. 
 
-```sh
-mkdir ~/raylib-gamejam && cd ~/raylib-gamejam
-git clone --depth 1 --branch 6.0 https://github.com/raysan5/raylib
-make -C raylib/src
-git clone https://github.com/$(User Name)/$(Repo Name).git
-cd $(Repo Name)
-make -C src
-src/raylib_game
-```
+![Creation menu](screenshots/create_menu.png "Creation menu")
 
-This template has been created to be used with raylib (www.raylib.com) and it's licensed under an unmodified zlib/libpng license.
+### Bormap files 
+The maps save to a custom file format, called .bormap (short for Boraz map).
+The file itself describes the name of the map, the path to the tileset in use, the background colour, the width and height of the map, and an array of (tile, collision) pairs.
 
-_Copyright (c) 2014-2026 Ramon Santamaria ([@raysan5](https://github.com/raysan5))_
+## In action
 
------------------------------------
-
-## $(Game Title)
-
-![$(Game Title)](screenshots/screenshot000.png "$(Game Title)")
-
-### Description
-
-$(Your Game Description)
-
-### Features
-
- - $(Game Feature 01)
- - $(Game Feature 02)
- - $(Game Feature 03)
-
-### Controls
-
-Keyboard:
- - $(Game Control 01)
- - $(Game Control 02)
- - $(Game Control 03)
-
-### Screenshots
-
-_TODO: Show your game to the world, animated GIFs recommended!._
-
-### Developers
-
- - $(Developer 01) - $(Role/Tasks Developed)
- - $(Developer 02) - $(Role/Tasks Developed)
- - $(Developer 03) - $(Role/Tasks Developed)
-
-### Links
-
- - YouTube Gameplay: $(YouTube Link)
- - itch.io Release: $(itch.io Game Page)
- - Steam Release: $(Steam Game Page)
+![Creation menu](screenshots/process.gif "Creation menu")
 
 ### License
 
 This project sources are licensed under an unmodified zlib/libpng license, which is an OSI-certified, BSD-like license that allows static linking with closed source software. Check [LICENSE](LICENSE) for further details.
 
-$(Additional Licenses)
 
-*Copyright (c) $(Year) $(User Name) ($(User Twitter/GitHub Name))*
+*Copyright (c) 2026 Boraz10*
