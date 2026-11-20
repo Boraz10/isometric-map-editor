@@ -30,18 +30,29 @@
 //     0: standard (font size 20)
 //     1: small (font size 5)
 
-// TODO: I might be able to take a reference to mousepos into the contructor, which would clean things up a little bit
-class Button {
+class Component {
+    protected:
+        Rectangle rect;
+        Vector2& mousePos;
+        int& frameCounter;
     public:
-        Button(Rectangle rectangle, std::string buttonText, int buttonType=0);
-        void draw();
-        void updateButtonText(std::string& text);
-        void checkHovered(Vector2& mousePos);
-        bool clicked();
+        Component(Rectangle rect, Vector2& mousePos, int& frameCounter): rect(rect), mousePos(mousePos), frameCounter(frameCounter) {}
         bool hovered = false;
+        virtual void draw() = 0;
+        virtual void checkHovered() = 0;
 
+        virtual ~Component() = default;
+};
+
+
+class Button: public Component {
+    public:
+        Button(Rectangle rectangle, Vector2& mousePos, int& frameCounter, std::string buttonText, int buttonType=0);
+        void draw() override;
+        void checkHovered() override;
+        void updateButtonText(std::string &text);
+        bool clicked();
     private:
-        Rectangle buttonRect = {-1, -1, -1, -1};
         std::string buttonText = "";
         int textSize = -1;
         Color buttonColor = btn_MAIN_COLOR;
@@ -55,17 +66,15 @@ class Button {
 //     1: number (0-9, max 3 chars)
 //     2: hex (0-9 and A-F, max 6 chars)
 //     3: unrestricted (all printable chars, max 999 chars, e.g. for file paths)
-class TextField {
+class TextField: public Component {
     public:
-        TextField(Rectangle rectangle, std::string labelText="", int fieldType=0, std::string defaultText="");
-        void draw(int &frames);
-        void checkHovered(Vector2& mousePos);
+        TextField(Rectangle rectangle, Vector2& mousePos, int& frameCounter, std::string labelText="", int fieldType=0, std::string defaultText="");
+        void draw() override;
+        void checkHovered() override;
         std::string getText();
         void setDefaultText(std::string& newText);
-        bool hovered = false;
 
     private:
-        Rectangle fieldRect = {-1, -1, -1, -1};
         std::string label = "";
         int labelSize = -1;
         std::string text = "";
@@ -77,13 +86,13 @@ class TextField {
 };
 
 // A simple rectangle with text centered in the middle
-class TextBox {
+class TextBox: public Component {
     public:
-        TextBox(Rectangle rectangle, std::string text, int fontSize, Color background, Color border);
-        void draw();
+        TextBox(Rectangle rectangle, Vector2& mousePos, int& frameCounter, std::string text, int fontSize, Color background, Color border);
+        void draw() override;
+        void checkHovered() override;
         void updateText(std::string& newText);
     private:
-        Rectangle textBoxRect;
         std::string text;
         int textSize;
         int fontSize;
@@ -91,15 +100,13 @@ class TextBox {
         Color borderColor;
 };
 
-class BackButton {
+class BackButton: public Component {
     public:
-        BackButton(int posX, int posY);
-        void draw();
-        void checkHovered(Vector2& mousePos);
+        BackButton(int posX, int posY, Vector2& mousePos, int& frameCounter);
+        void draw() override;
+        void checkHovered() override;
         bool clicked();
-        bool hovered = false;
 
     private:
-        Rectangle rect = {-1, -1, -1, -1};
         Color buttonColor = btn_MAIN_COLOR;
 };

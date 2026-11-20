@@ -91,6 +91,8 @@ typedef struct TileDef
 static const int screenWidth = 800;
 static const int screenHeight = 450;
 
+int framesCounter = 0;
+
 // file data
 std::string mapFileName = "";
 std::filesystem::path mapFilePath = "";
@@ -151,7 +153,6 @@ int main(void)
         clearMessage();
     };
 
-    int framesCounter = 0;
 
     // Load cursor and cheat tiles seperately.
     // TODO: Make this whole secion a lot cleaner.
@@ -222,43 +223,68 @@ int main(void)
     // Components for menu's
 
     // main menu
-    Button main_newButton(Rectangle{(screenWidth / 4) - 150, (screenHeight / 2), 300, 40}, "Create New");
-    Button main_loadButton(Rectangle{(screenWidth / 4) + 250, (screenHeight / 2), 300, 40}, "Load Map");
+    Button main_newButton(Rectangle{(screenWidth / 4) - 150, (screenHeight / 2), 300, 40}, mousePos, framesCounter, "Create New");
+    Button main_loadButton(Rectangle{(screenWidth / 4) + 250, (screenHeight / 2), 300, 40}, mousePos, framesCounter, "Load Map");
 
     // Create menu
-    TextField create_nameField(Rectangle{(screenWidth / 2) - (350 / 2), 70, 350, 40}, "Map Name: ", 0);
-    TextField create_widthField(Rectangle{(screenWidth / 2) + 80, 130, 60, 40}, "Width:", 1);
-    TextField create_heightField(Rectangle{(screenWidth / 2) - 150, 130, 60, 40}, "Height:", 1);
-    Button create_tilesetField(Rectangle{(screenWidth / 2) - 200, 190, 400, 40}, "Click here to add tileset to use");
-    TextField create_colorSelectField(Rectangle{(screenWidth / 2) + 50, 250, 150, 40}, "Background Color (HEX RGB):", 2);
+    TextField create_nameField(Rectangle{(screenWidth / 2) - (350 / 2), 70, 350, 40}, mousePos, framesCounter, "Map Name: ", 0);
+    TextField create_widthField(Rectangle{(screenWidth / 2) + 80, 130, 60, 40}, mousePos, framesCounter, "Width:", 1);
+    TextField create_heightField(Rectangle{(screenWidth / 2) - 150, 130, 60, 40}, mousePos, framesCounter, "Height:", 1);
+    Button create_tilesetField(Rectangle{(screenWidth / 2) - 200, 190, 400, 40}, mousePos, framesCounter, "Click here to add tileset to use");
+    TextField create_colorSelectField(Rectangle{(screenWidth / 2) + 50, 250, 150, 40}, mousePos, framesCounter, "Background Color (HEX RGB):", 2);
 
-    TextBox create_defaultTileBox({(screenWidth / 2) - 80, 300, 280, 40}, "", 20, WHITE, BLACK);
-    Button create_defaultTileUp(Rectangle{(screenWidth / 2) - 140, 300, 50, 15}, std::string("/\\"), 1);
-    Button create_defaultTileDown(Rectangle{(screenWidth / 2) - 140, 325, 50, 15}, std::string("\\/"), 1);
+    TextBox create_defaultTileBox({(screenWidth / 2) - 80, 300, 280, 40}, mousePos, framesCounter, "", 20,  WHITE, BLACK);
+    Button create_defaultTileUp(Rectangle{(screenWidth / 2) - 140, 300, 50, 15}, mousePos, framesCounter, std::string("/\\"), 1);
+    Button create_defaultTileDown(Rectangle{(screenWidth / 2) - 140, 325, 50, 15}, mousePos, framesCounter, std::string("\\/"), 1);
 
-    BackButton create_backButton(screenWidth - 60, 10);
+    BackButton create_backButton(screenWidth - 60, 10, mousePos, framesCounter);
 
-    Button create_createButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, "Create New Map");
+    Button create_createButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, mousePos, framesCounter, "Create New Map");
 
     // Load menu
     //  loadMapFromFile(char const * fileName)
-    TextBox load_filePickerText(Rectangle{(screenWidth / 2) - (350 / 2), 180, 350, 40}, "", 20, WHITE, BLACK);
-    Button load_filePicker(Rectangle{(screenWidth / 2) - (350 / 2), 230, 350, 40}, "Browse...");
-    Button load_loadButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, "Load");
+    TextBox load_filePickerText(Rectangle{(screenWidth / 2) - (350 / 2), 180, 350, 40}, mousePos, framesCounter, "", 20, WHITE, BLACK);
+    Button load_filePicker(Rectangle{(screenWidth / 2) - (350 / 2), 230, 350, 40}, mousePos, framesCounter, "Browse...");
+    Button load_loadButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, mousePos, framesCounter, "Load");
 
-    BackButton load_backButton(screenWidth - 60, 10);
+    BackButton load_backButton(screenWidth - 60, 10, mousePos, framesCounter);
 
     // Editor screen: Save button
-    Button editor_saveButton({(screenWidth - 160), 15, 150, 40}, std::string("Save"));
+    Button editor_saveButton({(screenWidth - 160), 15, 150, 40},mousePos, framesCounter, std::string("Save"));
 
     // Save screen
-    TextField save_mapName(Rectangle{(screenWidth / 2) - (350 / 2), 130, 350, 40}, "Map Name:");
-    TextBox save_locationText(Rectangle{(screenWidth / 2) - (350 / 2), 220, 350, 40}, "", 20, WHITE, BLACK);
-    Button save_location(Rectangle{(screenWidth / 2) - (350 / 2), 270, 350, 40}, "Browse...");
+    TextField save_mapName(Rectangle{(screenWidth / 2) - (350 / 2), 130, 350, 40},mousePos, framesCounter, "Map Name:");
+    TextBox save_locationText(Rectangle{(screenWidth / 2) - (350 / 2), 220, 350, 40},mousePos, framesCounter, "", 20, WHITE, BLACK);
+    Button save_location(Rectangle{(screenWidth / 2) - (350 / 2), 270, 350, 40},mousePos, framesCounter, "Browse...");
 
-    BackButton save_backButton(screenWidth - 60, 10);
+    BackButton save_backButton(screenWidth - 60, 10, mousePos, framesCounter);
 
-    Button save_saveButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, "Save");
+    Button save_saveButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, mousePos, framesCounter, "Save");
+
+    std::vector<Component*> main_Components = {
+        &main_newButton, &main_loadButton
+    };
+
+    std::vector<Component*> create_Components = {
+    &create_nameField, &create_widthField, &create_heightField,
+    &create_tilesetField, &create_colorSelectField, &create_defaultTileBox,
+    &create_defaultTileUp, &create_defaultTileDown, &create_backButton,
+   &create_createButton
+    };
+
+    std::vector<Component*> load_Components = {
+    &load_filePickerText, &load_filePicker, &load_loadButton, 
+    &load_backButton
+    };
+
+    std::vector<Component*> editor_Components = {
+        &editor_saveButton
+    };
+
+    std::vector<Component*> save_Components = {
+        &save_mapName, &save_locationText, &save_location,
+        &save_backButton, &save_saveButton
+    };
 
     //---------------------------------------------------------
     // Main Loop
@@ -277,8 +303,7 @@ int main(void)
         {
         case MAIN_MENU:
         {
-            main_newButton.checkHovered(mousePos);
-            main_loadButton.checkHovered(mousePos);
+            for (Component* c : main_Components) c->checkHovered();
 
             if (main_newButton.clicked())
             {
@@ -306,16 +331,7 @@ int main(void)
         break;
         case CREATE_MENU:
         {
-            create_backButton.checkHovered(mousePos);
-            create_nameField.checkHovered(mousePos);
-            create_widthField.checkHovered(mousePos);
-            create_heightField.checkHovered(mousePos);
-            create_colorSelectField.checkHovered(mousePos);
-
-            create_createButton.checkHovered(mousePos);
-            create_tilesetField.checkHovered(mousePos);
-            create_defaultTileUp.checkHovered(mousePos);
-            create_defaultTileDown.checkHovered(mousePos);
+            for (Component* c : create_Components) c->checkHovered();
 
             // update frame counter for cursor icon in text boxes (i might be able to take this into the textField class we shall see)
             if (create_nameField.hovered || create_widthField.hovered || create_heightField.hovered || create_colorSelectField.hovered)
@@ -454,9 +470,7 @@ int main(void)
         break;
         case LOAD_MENU:
         {
-            load_backButton.checkHovered(mousePos);
-            load_filePicker.checkHovered(mousePos);
-            load_loadButton.checkHovered(mousePos);
+            for (Component* c : load_Components) c->checkHovered();
 
             if (load_filePicker.clicked())
             {
@@ -503,10 +517,7 @@ int main(void)
         break;
         case SAVE_MENU:
         {
-            save_backButton.checkHovered(mousePos);
-            save_mapName.checkHovered(mousePos);
-            save_location.checkHovered(mousePos);
-            save_saveButton.checkHovered(mousePos);
+            for (Component* c : save_Components) c->checkHovered();
 
             // update frame counter for the blinking cursor in the name field
             if (save_mapName.hovered)
@@ -600,7 +611,7 @@ int main(void)
         {
 
             // Save button
-            editor_saveButton.checkHovered(mousePos);
+            for (Component* c : editor_Components) c->checkHovered();
 
             if (editor_saveButton.clicked())
             {
@@ -718,11 +729,7 @@ int main(void)
                 // Screen Title Text
                 displayScreenTitle("Isometric Map Editor");
 
-                // Create button
-                main_newButton.draw();
-
-                // Load button
-                main_loadButton.draw();
+                for (Component* c : main_Components) c->draw();
             }
             break;
             case CREATE_MENU:
@@ -731,37 +738,8 @@ int main(void)
                 // Screen Title Text
                 displayScreenTitle("Create New Map");
 
-                // Name field
-                create_nameField.draw(framesCounter);
-
-                // Height field
-                create_heightField.draw(framesCounter);
-
-                // width field
-                create_widthField.draw(framesCounter);
-
-                // Tileset file input
-                create_tilesetField.draw();
-
-                // Color select field
-                create_colorSelectField.draw(framesCounter);
-
-                // Default tile text
+                for (Component* c : create_Components) c->draw();
                 DrawText("Default Tile:", (screenWidth / 2) - 288, 305, 22, BLACK);
-                // Rectangle{(screenWidth / 2) - 140, 320, 50, 15}
-
-                // Default tile rectangle
-                create_defaultTileBox.draw();
-
-                // Up and down buttons
-                create_defaultTileUp.draw();
-                create_defaultTileDown.draw();
-
-                // back button
-                create_backButton.draw();
-
-                // Create button
-                create_createButton.draw();
             }
             break;
             case LOAD_MENU:
@@ -770,17 +748,7 @@ int main(void)
                 // Screen Title Text
                 displayScreenTitle("Load Existing Map");
 
-                // back button
-                load_backButton.draw();
-
-                // file picker text box
-                load_filePickerText.draw();
-
-                // file picker
-                load_filePicker.draw();
-
-                // load button
-                load_loadButton.draw();
+                for (Component* c : load_Components) c->draw();
             }
             break;
             case SAVE_MENU:
@@ -789,14 +757,7 @@ int main(void)
                 // Screen Title Text
                 displayScreenTitle("Save map");
 
-                save_mapName.draw(framesCounter);
-
-                save_locationText.draw();
-                save_location.draw();
-
-                save_backButton.draw();
-
-                save_saveButton.draw();
+                for (Component* c : save_Components) c->draw();
             }
             break;
             case EDITOR:
@@ -818,9 +779,17 @@ int main(void)
                                 (float)screenPos.y - (src.height - tileSize.y)};
                             DrawTextureRec(tilesetTexture, src, pos, WHITE);
 
-                            // Draw the collision layer on top of the texture layer, if collision mode is on
-                            if (collisionLayer)
+                        }
+                    }
+
+                    // second set of for loop, so it draws on top of the map no matter what
+                    if (collisionLayer)
+                    {
+                        for (int y = 0; y < worldSize.y; y++)
+                        {
+                            for (int x = 0; x < worldSize.x; x++)
                             {
+                                Vector2i screenPos = toScreen(x, y);
                                 if (pCollisionMap[y * worldSize.x + x])
                                 {
                                     // Draw on the tile's footprint, not the raised position used for tall sprites
@@ -870,7 +839,7 @@ int main(void)
                          layerRect.x + 6, layerRect.y + 6, 16, BLACK);
 
                 // save button
-                editor_saveButton.draw();
+                for (Component* c : editor_Components) c->draw();
                 break;
             }
             }
@@ -1059,10 +1028,12 @@ bool loadMapFromFile(char const *fileName)
     mapTilesetPath = line;
 
     // load the tileset
-    if (mapTilesetPath == basicTilesetPath) {
+    if (mapTilesetPath == basicTilesetPath)
+    {
         loadTileset(mapTilesetPath, true);
     }
-    else {
+    else
+    {
         loadTileset(mapTilesetPath, false);
     }
 
