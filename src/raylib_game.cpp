@@ -142,7 +142,7 @@ int main(void)
     // Initialization
     //---------------------------------------------------------
 
-    InitWindow(screenWidth, screenHeight, "Map making program");
+    InitWindow(screenWidth, screenHeight, "Isometric Map Creator");
     AppScreen currentScreen = MAIN_MENU;
     SetTargetFPS(60);
 
@@ -213,7 +213,7 @@ int main(void)
     bool collisionBrush = true;
 
     // Rectangle displaying currentLayer
-    Rectangle layerRect = {boxPositionX, boxPositionY - 30, box_size, 30};
+    Rectangle layerRect = {(float)boxPositionX, (float)boxPositionY - 30, (float)box_size, 30};
 
     // Info for displaying the layer GUI image
     Vector2 layerGUIImagePos = {
@@ -948,7 +948,7 @@ void displayScreenTitle(const char *text)
 {
     int titleFontSize = 30;
     int textWidth = MeasureText(text, titleFontSize);
-    Vector2 titlePos = {(screenWidth - textWidth) / 2, 20};
+    Vector2 titlePos = {(float)((screenWidth - textWidth) / 2), 20};
 
     DrawText(text, titlePos.x, titlePos.y, titleFontSize, BLACK);
 }

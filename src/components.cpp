@@ -82,7 +82,7 @@ void TextField::draw()
     DrawText(text.c_str(), (int)rect.x + 5, (int)rect.y + 8, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
 
     // Draw blinking line
-    if (hovered && text.length() < textLength)
+    if (hovered && text.length() < (size_t)textLength)
     {
         if (((frameCounter / 20) % 2) == 0)
             DrawText("_", (int)rect.x + 8 + MeasureText(text.c_str(), intxt_FONT_SIZE), (int)rect.y + 12, intxt_FONT_SIZE, TYPING_TEXT_COLOR);
@@ -99,7 +99,7 @@ void TextField::checkHovered()
         int key = GetCharPressed();
         while (key > 0)
         {
-            if (checkCharacterRange(key) && (this->text.length() < this->textLength))
+            if (checkCharacterRange(key) && (this->text.length() < (size_t)this->textLength))
                 this->text += (char)key;
 
             key = GetCharPressed(); // Check next character in the queue
@@ -111,7 +111,7 @@ void TextField::checkHovered()
                 this->text.pop_back();
         }
 
-        if (this->text.length() >= this->textLength)
+        if (this->text.length() >= (size_t)this->textLength)
             showErrorMessage("Reached Character Limit", 0.1f);
     }
     else

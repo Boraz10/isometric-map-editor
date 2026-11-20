@@ -1,7 +1,7 @@
 # Isometric Map Creator
 ### By Boraz10
 
-![Isometric Map Creator](screenshots/editor2.png "Isometric Map Creator")
+![Isometric Map Creator](screenshots/editor1.png "Isometric Map Creator")
 
 ## Description
 
