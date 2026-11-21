@@ -1,41 +1,38 @@
 /*******************************************************************************************
  *
- *   raylib game template
+ *   Isometric Map Editor
+ *
+ *   By Boraz10
+ *
+ *   A simple editor to make maps for a game in isometric view
  *
  *
  *   Code licensed under an unmodified zlib/libpng license, which is an OSI-certified,
  *   BSD-like license that allows static linking with closed source software
  *
- *   Copyright (c) 2021-2026 Ramon Santamaria (@raysan5)
  *
  ********************************************************************************************/
 
+#include <iostream>
+#include <filesystem>
+#include <iomanip>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+#include <cmath>
+
 #include "raylib.h"
+#include "tinyfiledialogs.h"
 
 #include "components.h"
 #include "utils.h"
-
-#include "tinyfiledialogs.h"
-
-#include <iostream>
-
-#include <filesystem>
-
-#include <iomanip>
 
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h> // Emscripten library
 #endif
 
-#include <stdio.h>  // Required for: printf()
-#include <stdlib.h> // Required for:
-#include <string>   // Required for:
+#include <string> // Required for:
 #include <vector>
-
-#include <fstream>
-#include <sstream>
-#include <algorithm>
-#include <cmath>
 
 //----------------------------------------------------------------------------------
 // Defines and Macros
@@ -79,6 +76,7 @@ typedef struct Vector2i
     }
 } Vector2i;
 
+// From the tilesheet, each tile will be assigned a name, as well as a rectangle
 typedef struct TileDef
 {
     std::string name;
@@ -93,7 +91,7 @@ static const int screenHeight = 450;
 
 int framesCounter = 0;
 
-// file data
+// map file data
 std::string mapFileName = "";
 std::filesystem::path mapFilePath = "";
 
@@ -105,14 +103,15 @@ bool worldNameValid = false;
 
 Color backgroundColor = RAYWHITE; // background color for the map
 
-int *pWorld = nullptr;         // 2D world array
+int *pWorld = nullptr;         // 2D world array, each integer corresponds to a tile
 bool *pCollisionMap = nullptr; // 2D collsion map array
 
 // Tileset data
 Texture2D tilesetTexture;
 int totalTiles;
-std::vector<TileDef> tileData; // Table for tileset. I need to do this manually it seems.
+std::vector<TileDef> tileData; // Table for tileset, containing info about each tile. I need to do this manually it seems.
 Vector2i tileSize = {0, 0};
+
 const char *basicTilesetPath = "basic1.tileset"; // initialise with a pre-packed tileset
 std::string mapTilesetPath = basicTilesetPath;
 int defaultTile = 0;
@@ -129,10 +128,9 @@ void displayScreenTitle(const char *text);                      // Display a tit
 
 void initialiseNewWorld(Vector2i worldSize, int default_tile); // initilaise a new, empty world with a default tile.
 
-bool saveMapToFile();
-bool loadMapFromFile(char const *fileName);
-
-bool isFilepathValid(std::filesystem::path &);
+bool saveMapToFile();                          // Save a map created with the program to a file on the system
+bool loadMapFromFile(char const *fileName);    // Load a file on the system as a map in the program
+bool isFilepathValid(std::filesystem::path &); // Validate the filepath of a provided file
 
 //----------------------------------------------------------------------------------
 // Program main entry point
@@ -143,16 +141,16 @@ int main(void)
     //---------------------------------------------------------
 
     InitWindow(screenWidth, screenHeight, "Isometric Map Creator");
-    AppScreen currentScreen = MAIN_MENU;
     SetTargetFPS(60);
 
-    // lambda function for changing screen, which also clears the message
+    AppScreen currentScreen = MAIN_MENU;
+
+    // lambda function for changing screen, which also clears the alert message
     auto changeScreen = [&currentScreen](AppScreen newScreen)
     {
         currentScreen = newScreen;
         clearMessage();
     };
-
 
     // Load cursor and cheat tiles seperately.
     // TODO: Make this whole secion a lot cleaner.
@@ -200,27 +198,32 @@ int main(void)
 
     // Initialise tile selection info
     int currentTile = 0;
-
+    
     // Info for positioning of the GUI
     int box_size = 128;
     int box_offset = 8;
-
+    
     int boxPositionX = box_offset;
     int boxPositionY = screenHeight - box_size - box_offset;
-
+    
     // Layer boolean
     bool collisionLayer = false; // false = Map layer, true = Collision layer
     bool collisionBrush = true;
-
+    
     // Rectangle displaying currentLayer
     Rectangle layerRect = {(float)boxPositionX, (float)boxPositionY - 30, (float)box_size, 30};
-
+    
     // Info for displaying the layer GUI image
     Vector2 layerGUIImagePos = {
         boxPositionX + (box_size - 64) / 2.0f,
         boxPositionY + box_size - box_size / 3.0f - 32};
+    
+    // Current mouse cursor    
+    int currentCursor = MOUSE_CURSOR_DEFAULT;
 
-    // Components for menu's
+
+    // Components for menu's (This is the WORST code i've ever written i am SO sorry)
+    // ----------------------------------------------
 
     // main menu
     Button main_newButton(Rectangle{(screenWidth / 4) - 150, (screenHeight / 2), 300, 40}, mousePos, framesCounter, "Create New");
@@ -232,78 +235,72 @@ int main(void)
     TextField create_heightField(Rectangle{(screenWidth / 2) - 150, 130, 60, 40}, mousePos, framesCounter, "Height:", 1);
     Button create_tilesetField(Rectangle{(screenWidth / 2) - 200, 190, 400, 40}, mousePos, framesCounter, "Click here to add tileset to use");
     TextField create_colorSelectField(Rectangle{(screenWidth / 2) + 50, 250, 150, 40}, mousePos, framesCounter, "Background Color (HEX RGB):", 2);
-
-    TextBox create_defaultTileBox({(screenWidth / 2) - 80, 300, 280, 40}, mousePos, framesCounter, "", 20,  WHITE, BLACK);
+    TextBox create_defaultTileBox({(screenWidth / 2) - 80, 300, 280, 40}, mousePos, framesCounter, "", 20, WHITE, BLACK);
     Button create_defaultTileUp(Rectangle{(screenWidth / 2) - 140, 300, 50, 15}, mousePos, framesCounter, std::string("/\\"), 1);
     Button create_defaultTileDown(Rectangle{(screenWidth / 2) - 140, 325, 50, 15}, mousePos, framesCounter, std::string("\\/"), 1);
-
     BackButton create_backButton(screenWidth - 60, 10, mousePos, framesCounter);
-
     Button create_createButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, mousePos, framesCounter, "Create New Map");
 
     // Load menu
-    //  loadMapFromFile(char const * fileName)
     TextBox load_filePickerText(Rectangle{(screenWidth / 2) - (350 / 2), 180, 350, 40}, mousePos, framesCounter, "", 20, WHITE, BLACK);
     Button load_filePicker(Rectangle{(screenWidth / 2) - (350 / 2), 230, 350, 40}, mousePos, framesCounter, "Browse...");
     Button load_loadButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, mousePos, framesCounter, "Load");
-
     BackButton load_backButton(screenWidth - 60, 10, mousePos, framesCounter);
 
-    // Editor screen: Save button
-    Button editor_saveButton({(screenWidth - 160), 15, 150, 40},mousePos, framesCounter, std::string("Save"));
+    // Editor screen
+    Button editor_saveButton({(screenWidth - 160), 15, 150, 40}, mousePos, framesCounter, std::string("Save"));
 
     // Save screen
-    TextField save_mapName(Rectangle{(screenWidth / 2) - (350 / 2), 130, 350, 40},mousePos, framesCounter, "Map Name:");
-    TextBox save_locationText(Rectangle{(screenWidth / 2) - (350 / 2), 220, 350, 40},mousePos, framesCounter, "", 20, WHITE, BLACK);
-    Button save_location(Rectangle{(screenWidth / 2) - (350 / 2), 270, 350, 40},mousePos, framesCounter, "Browse...");
-
+    TextField save_mapName(Rectangle{(screenWidth / 2) - (350 / 2), 130, 350, 40}, mousePos, framesCounter, "Map Name:");
+    TextBox save_locationText(Rectangle{(screenWidth / 2) - (350 / 2), 220, 350, 40}, mousePos, framesCounter, "", 20, WHITE, BLACK);
+    Button save_location(Rectangle{(screenWidth / 2) - (350 / 2), 270, 350, 40}, mousePos, framesCounter, "Browse...");
     BackButton save_backButton(screenWidth - 60, 10, mousePos, framesCounter);
-
     Button save_saveButton(Rectangle{(screenWidth / 2) - 150, screenHeight - 60, 300, 40}, mousePos, framesCounter, "Save");
 
-    std::vector<Component*> main_Components = {
-        &main_newButton, &main_loadButton
-    };
 
-    std::vector<Component*> create_Components = {
-    &create_nameField, &create_widthField, &create_heightField,
-    &create_tilesetField, &create_colorSelectField, &create_defaultTileBox,
-    &create_defaultTileUp, &create_defaultTileDown, &create_backButton,
-   &create_createButton
-    };
+    // Vectors of components for each screen
+    // ----------------------------------------------
 
-    std::vector<Component*> load_Components = {
-    &load_filePickerText, &load_filePicker, &load_loadButton, 
-    &load_backButton
-    };
+    std::vector<Component *> main_Components = {
+        &main_newButton, &main_loadButton};
 
-    std::vector<Component*> editor_Components = {
-        &editor_saveButton
-    };
+    std::vector<Component *> create_Components = {
+        &create_nameField, &create_widthField, &create_heightField,
+        &create_tilesetField, &create_colorSelectField, &create_defaultTileBox,
+        &create_defaultTileUp, &create_defaultTileDown, &create_backButton,
+        &create_createButton};
 
-    std::vector<Component*> save_Components = {
+    std::vector<Component *> load_Components = {
+        &load_filePickerText, &load_filePicker, &load_loadButton,
+        &load_backButton};
+
+    std::vector<Component *> editor_Components = {
+        &editor_saveButton};
+
+    std::vector<Component *> save_Components = {
         &save_mapName, &save_locationText, &save_location,
-        &save_backButton, &save_saveButton
-    };
+        &save_backButton, &save_saveButton};
 
     //---------------------------------------------------------
     // Main Loop
     // --------------------------------------------------------
-    int currentCursor = MOUSE_CURSOR_DEFAULT;
+    
     while (!WindowShouldClose())
     {
         // -----Update-----
         // Get mouse position
         mousePos = GetMousePosition();
 
-        // Each screen can change this; it's applied once after the update switch
+        // Changed in the code for each screen
         int desiredCursor = MOUSE_CURSOR_DEFAULT;
 
+        // Logic
         switch (currentScreen)
         {
         case MAIN_MENU:
         {
-            for (Component* c : main_Components) c->checkHovered();
+            for (Component *c : main_Components)
+                c->checkHovered();
 
             if (main_newButton.clicked())
             {
@@ -329,9 +326,11 @@ int main(void)
             }
         }
         break;
+
         case CREATE_MENU:
         {
-            for (Component* c : create_Components) c->checkHovered();
+            for (Component *c : create_Components)
+                c->checkHovered();
 
             // update frame counter for cursor icon in text boxes (i might be able to take this into the textField class we shall see)
             if (create_nameField.hovered || create_widthField.hovered || create_heightField.hovered || create_colorSelectField.hovered)
@@ -468,9 +467,11 @@ int main(void)
             }
         }
         break;
+
         case LOAD_MENU:
         {
-            for (Component* c : load_Components) c->checkHovered();
+            for (Component *c : load_Components)
+                c->checkHovered();
 
             if (load_filePicker.clicked())
             {
@@ -515,9 +516,11 @@ int main(void)
             }
         }
         break;
+
         case SAVE_MENU:
         {
-            for (Component* c : save_Components) c->checkHovered();
+            for (Component *c : save_Components)
+                c->checkHovered();
 
             // update frame counter for the blinking cursor in the name field
             if (save_mapName.hovered)
@@ -611,7 +614,8 @@ int main(void)
         {
 
             // Save button
-            for (Component* c : editor_Components) c->checkHovered();
+            for (Component *c : editor_Components)
+                c->checkHovered();
 
             if (editor_saveButton.clicked())
             {
@@ -729,7 +733,8 @@ int main(void)
                 // Screen Title Text
                 displayScreenTitle("Isometric Map Editor");
 
-                for (Component* c : main_Components) c->draw();
+                for (Component *c : main_Components)
+                    c->draw();
             }
             break;
             case CREATE_MENU:
@@ -738,7 +743,9 @@ int main(void)
                 // Screen Title Text
                 displayScreenTitle("Create New Map");
 
-                for (Component* c : create_Components) c->draw();
+                for (Component *c : create_Components)
+                    c->draw();
+
                 DrawText("Default Tile:", (screenWidth / 2) - 288, 305, 22, BLACK);
             }
             break;
@@ -746,9 +753,10 @@ int main(void)
             {
                 ClearBackground(RAYWHITE); // Render background
                 // Screen Title Text
-                displayScreenTitle("Load Existing Map");
+                displayScreenTitle("Load Existing Map"); 
 
-                for (Component* c : load_Components) c->draw();
+                for (Component *c : load_Components)
+                    c->draw();
             }
             break;
             case SAVE_MENU:
@@ -757,7 +765,8 @@ int main(void)
                 // Screen Title Text
                 displayScreenTitle("Save map");
 
-                for (Component* c : save_Components) c->draw();
+                for (Component *c : save_Components)
+                    c->draw();
             }
             break;
             case EDITOR:
@@ -778,7 +787,6 @@ int main(void)
                                 (float)screenPos.x,
                                 (float)screenPos.y - (src.height - tileSize.y)};
                             DrawTextureRec(tilesetTexture, src, pos, WHITE);
-
                         }
                     }
 
@@ -806,6 +814,8 @@ int main(void)
                     // DrawRectangleLines(selectedCell.x * tileSize.x, selectedCell.y * tileSize.y, tileSize.x, tileSize.y, RED);
                 }
                 EndMode2D();
+
+                // Draw the GUI for block currently in use and the current layer
 
                 DrawText(TextFormat("Selected : %d, %d", selected.x, selected.y), 4, 4, 22, DARKGRAY);
 
@@ -839,7 +849,8 @@ int main(void)
                          layerRect.x + 6, layerRect.y + 6, 16, BLACK);
 
                 // save button
-                for (Component* c : editor_Components) c->draw();
+                for (Component *c : editor_Components)
+                    c->draw();
                 break;
             }
             }
